@@ -21,19 +21,19 @@ export class AuthController {
   @Throttle(AUTH_THROTTLE)
   @Post("otp/request")
   requestOtp(@Req() req: TenantRequest, @Body() dto: RequestOtpDto) {
-    return this.auth.requestOtp(req.tenantSlug, dto);
+    return this.auth.requestOtp(req.tenantId, dto);
   }
 
   @Throttle(AUTH_THROTTLE)
   @Post("otp/verify")
   verifyOtp(@Req() req: TenantRequest, @Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(req.tenantSlug, dto, req.ip);
+    return this.auth.verifyOtp(req.tenantId, dto, req.ip);
   }
 
   @Throttle(AUTH_THROTTLE)
   @Post("social/login")
   socialLogin(@Req() req: TenantRequest, @Body() dto: SocialLoginDto) {
-    return this.auth.socialLogin(req.tenantSlug, dto, req.ip);
+    return this.auth.socialLogin(req.tenantId, dto, req.ip);
   }
 
   @Get("first-access/questionnaire")

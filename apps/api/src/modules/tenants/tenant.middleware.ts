@@ -3,7 +3,10 @@ import type { NextFunction, Request, Response } from "express";
 import { TenantsService } from "./tenants.service";
 
 export interface TenantRequest extends Request {
+  /** Slug do tenant (ex.: "demo") — usado para resolver branding/tema. */
   tenantSlug: string;
+  /** id real do `Tenant` no banco de controle — usado em toda FK/consulta. */
+  tenantId: string;
 }
 
 /**
@@ -11,8 +14,10 @@ export interface TenantRequest extends Request {
  *  - App mobile: header `X-Tenant-Slug` (fixo por build, ver ARCHITECTURE.md)
  *  - Portal web: subdomínio do `Host`
  *
- * Toda rota autenticada usa `req.tenantSlug` para escopar dados — nunca
- * confie em um tenantId vindo do corpo da requisição.
+ * Toda rota autenticada usa `req.tenantId` (o id real no banco de
+ * controle) para escopar dados — nunca confie em um tenantId vindo do
+ * corpo da requisição. `req.tenantSlug` serve apenas para resolver
+ * branding/tema white-label.
  */
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -30,7 +35,10 @@ export class TenantMiddleware implements NestMiddleware {
     // deixar a requisição prosseguir sem branding/políticas definidas.
     await this.tenants.getTheme(slug);
 
+    const tenant = await this.tenants.ensureTenantRecord(slug);
+
     req.tenantSlug = slug;
+    req.tenantId = tenant.id;
     next();
   }
 }
