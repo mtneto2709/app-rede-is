@@ -68,6 +68,8 @@ export const envSchema = z
     WHATSAPP_PROVIDER: z.string().optional(),
     WHATSAPP_API_TOKEN: z.string().optional(),
     WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+    WHATSAPP_TEMPLATE_NAME: z.string().optional(),
+    WHATSAPP_TEMPLATE_LANGUAGE: z.string().optional(),
     EMAIL_PROVIDER: z.string().optional(),
     EMAIL_API_KEY: z.string().optional(),
     EMAIL_FROM: z.string().email().optional(),
