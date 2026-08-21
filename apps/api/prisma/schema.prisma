@@ -1,0 +1,159 @@
+// Banco de controle próprio da plataforma.
+// NUNCA modela dados clínicos/cadastrais — esses vivem apenas no Sistema IS
+// e no e-SUS PEC e são lidos sob demanda pelos módulos em
+// src/modules/integrations/**. Ver ARCHITECTURE.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CONTROL_DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING_FIRST_ACCESS
+  ACTIVE
+  BLOCKED
+}
+
+enum AuthChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum SocialProvider {
+  GOOGLE
+  APPLE
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users               PlatformUser[]
+  questionnaireBank   QuestionnaireQuestion[]
+  auditLogEntries     AuditLogEntry[]
+}
+
+model PlatformUser {
+  id        String     @id @default(cuid())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  tenantId  String
+  email     String?
+  phone     String?
+  status    UserStatus @default(PENDING_FIRST_ACCESS)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  identities         UserIdentity[]
+  patientLink        PatientLink?
+  sessions           Session[]
+  otpCodes           OtpCode[]
+  questionnaireTries QuestionnaireAttempt[]
+  auditLogEntries    AuditLogEntry[]
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, phone])
+}
+
+/// Login social vinculado a um usuário (Google/Apple).
+model UserIdentity {
+  id             String         @id @default(cuid())
+  user           PlatformUser   @relation(fields: [userId], references: [id])
+  userId         String
+  provider       SocialProvider
+  providerUserId String
+  createdAt      DateTime       @default(now())
+
+  @@unique([provider, providerUserId])
+}
+
+/// Vínculo entre o usuário da plataforma e o registro de paciente nas bases
+/// legadas. Guarda apenas identificadores, nunca dado clínico.
+model PatientLink {
+  id             String   @id @default(cuid())
+  user           PlatformUser @relation(fields: [userId], references: [id])
+  userId         String       @unique
+  sourceSystem   String       // "sistema-is" | "esus-pec"
+  sourcePatientId String
+  linkedAt       DateTime     @default(now())
+
+  @@unique([sourceSystem, sourcePatientId])
+}
+
+model OtpCode {
+  id         String      @id @default(cuid())
+  user       PlatformUser? @relation(fields: [userId], references: [id])
+  userId     String?
+  channel    AuthChannel
+  contact    String
+  codeHash   String
+  attempts   Int         @default(0)
+  maxAttempts Int        @default(5)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime    @default(now())
+
+  @@index([contact, channel])
+}
+
+model QuestionnaireQuestion {
+  id       String   @id @default(cuid())
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId String
+  prompt   String
+  // ex.: "mother_name" | "reference_health_unit" | "birth_city" — usado para
+  // buscar a resposta correta a partir dos dados do Sistema IS/e-SUS PEC.
+  answerSourceField String
+  isActive Boolean  @default(true)
+}
+
+model QuestionnaireAttempt {
+  id           String   @id @default(cuid())
+  user         PlatformUser @relation(fields: [userId], references: [id])
+  userId       String
+  questionIds  String[]
+  // Gabarito gerado no momento da criação da tentativa (nunca enviado ao
+  // cliente) — { [questionId]: correctOptionId }. Ver QuestionnaireService.
+  answerKey    Json
+  sourceSystem String?  // sistema onde o paciente candidato foi encontrado
+  sourcePatientId String?
+  correctCount Int?
+  passed       Boolean?
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  user             PlatformUser @relation(fields: [userId], references: [id])
+  userId           String
+  refreshTokenHash String   @unique
+  userAgent        String?
+  ipAddress        String?
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+}
+
+/// Toda leitura sensível feita nas bases legadas fica registrada aqui.
+model AuditLogEntry {
+  id         String   @id @default(cuid())
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  tenantId   String
+  user       PlatformUser? @relation(fields: [userId], references: [id])
+  userId     String?
+  action     String   // ex.: "patients.dashboard.read", "auth.login.otp"
+  resource   String?  // ex.: "patient:<id>"
+  ipAddress  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([userId, createdAt])
+}

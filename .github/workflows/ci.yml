@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Verificar que integrações com Sistema IS/e-SUS PEC são somente-leitura
+        run: pnpm --filter @rede-is/api check:read-only-integrations
+
+      # Não-bloqueante por padrão: falsos positivos em deps transitivas são
+      # comuns. Trate achados como item de revisão manual, não como gate.
+      - name: Auditoria de dependências
+        run: pnpm audit --audit-level=high || true

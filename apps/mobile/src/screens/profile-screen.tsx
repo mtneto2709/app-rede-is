@@ -1,0 +1,80 @@
+import { useState } from "react";
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, Pressable, View } from "react-native";
+import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/theme/theme-provider";
+import { authApi } from "@/lib/api-client";
+
+export function ProfileScreen() {
+  const theme = useTheme();
+  const { accessToken, logout } = useAuth();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const styles = createStyles(theme);
+
+  async function handleDeleteAccount() {
+    if (!accessToken) return;
+    setIsDeleting(true);
+    try {
+      await authApi.deleteAccount(theme.slug, accessToken);
+      await logout();
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Meu Perfil</Text>
+
+      <View style={styles.card}>
+        <Text style={styles.cardText}>
+          Seus dados cadastrais (nome, CPF, cartão SUS) vêm diretamente do Sistema IS / e-SUS PEC e não podem ser
+          editados por aqui.
+        </Text>
+      </View>
+
+      <Pressable style={styles.outlineButton} onPress={logout}>
+        <Text style={styles.outlineButtonText}>Sair</Text>
+      </Pressable>
+
+      <View style={[styles.card, { borderWidth: 1, borderColor: `${theme.colors.danger}40` }]}>
+        <Text style={[styles.cardText, { color: theme.colors.danger, fontWeight: "600" }]}>Excluir conta</Text>
+        <Text style={styles.cardText}>
+          Isso remove seu acesso à plataforma e revoga suas sessões. Seu histórico clínico permanece nas bases de
+          saúde, que não pertencem a esta plataforma.
+        </Text>
+        {!confirmingDelete ? (
+          <Pressable style={styles.dangerOutlineButton} onPress={() => setConfirmingDelete(true)}>
+            <Text style={{ color: theme.colors.danger, fontWeight: "600" }}>Excluir minha conta</Text>
+          </Pressable>
+        ) : (
+          <>
+            <Pressable style={styles.dangerButton} onPress={handleDeleteAccount} disabled={isDeleting}>
+              {isDeleting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: "#fff", fontWeight: "600" }}>Confirmar exclusão</Text>
+              )}
+            </Pressable>
+            <Pressable onPress={() => setConfirmingDelete(false)}>
+              <Text style={{ color: theme.colors.textSecondary, textAlign: "center" }}>Cancelar</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+function createStyles(theme: ReturnType<typeof useTheme>) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background, padding: 20, gap: 16 },
+    title: { fontSize: 18, fontWeight: "600", color: theme.colors.textPrimary },
+    card: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, gap: 10 },
+    cardText: { fontSize: 13, color: theme.colors.textSecondary },
+    outlineButton: { borderWidth: 1, borderColor: `${theme.colors.primary}40`, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+    outlineButtonText: { color: theme.colors.primary, fontWeight: "600" },
+    dangerOutlineButton: { borderWidth: 1, borderColor: theme.colors.danger, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+    dangerButton: { backgroundColor: theme.colors.danger, borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  });
+}

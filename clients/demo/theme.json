@@ -1,0 +1,58 @@
+{
+  "slug": "demo",
+  "displayName": "Rede IS (Demo)",
+  "legalName": "Rede IS Plataforma de Saúde Ltda.",
+  "branding": {
+    "appName": "Rede IS",
+    "logoLightUrl": "/clients/demo/logo-light.svg",
+    "logoDarkUrl": "/clients/demo/logo-dark.svg",
+    "iconUrl": "/clients/demo/icon.png",
+    "faviconUrl": "/clients/demo/favicon.png",
+    "splashUrl": "/clients/demo/splash.png"
+  },
+  "colors": {
+    "primary": "#7C3AED",
+    "primaryForeground": "#FFFFFF",
+    "secondary": "#4F46E5",
+    "secondaryForeground": "#FFFFFF",
+    "background": "#F9FAFB",
+    "surface": "#FFFFFF",
+    "textPrimary": "#111827",
+    "textSecondary": "#6B7280",
+    "success": "#16A34A",
+    "warning": "#D97706",
+    "danger": "#DC2626"
+  },
+  "typography": {
+    "fontFamily": "Inter"
+  },
+  "mobile": {
+    "iosBundleId": "br.com.redeis.demo",
+    "androidPackage": "br.com.redeis.demo"
+  },
+  "web": {
+    "domains": ["demo.redeis.app", "localhost"]
+  },
+  "auth": {
+    "socialProviders": ["google", "apple"],
+    "otpChannels": ["sms", "whatsapp", "email"],
+    "requireFirstAccessQuestionnaire": true
+  },
+  "contactSupport": {
+    "phone": "11 3333-4444",
+    "whatsapp": "5511999998888",
+    "email": "suporte@redeis.app"
+  },
+  "socialLinks": [
+    { "platform": "facebook", "url": "https://facebook.com/redeis", "label": "Facebook" },
+    { "platform": "instagram", "url": "https://instagram.com/redeis", "label": "Instagram" }
+  ],
+  "banners": [
+    {
+      "title": "Gestão em Saúde",
+      "description": "Acompanhe seus atendimentos, agendamentos e documentos em um só lugar.",
+      "imageUrl": null,
+      "order": 1
+    }
+  ]
+}
