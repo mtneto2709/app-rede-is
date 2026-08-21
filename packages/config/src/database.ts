@@ -35,16 +35,3 @@ export function getEsusPecConnectionConfig(env: Env): DatabaseConnectionConfig {
     schema: env.ESUS_PEC_DB_SCHEMA,
   };
 }
-
-/** Configuração de conexão do banco de controle (próprio, leitura e escrita). */
-export function getControlDbConnectionConfig(env: Env): DatabaseConnectionConfig {
-  return {
-    host: env.CONTROL_DB_HOST,
-    port: env.CONTROL_DB_PORT,
-    database: env.CONTROL_DB_NAME,
-    user: env.CONTROL_DB_USER,
-    password: env.CONTROL_DB_PASSWORD,
-    ssl: env.CONTROL_DB_SSL,
-    schema: "public",
-  };
-}

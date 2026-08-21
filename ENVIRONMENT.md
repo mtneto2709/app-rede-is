@@ -32,14 +32,19 @@ ESUS_PEC_DB_SCHEMA=
 
 ## 3. Banco de controle (próprio, leitura e escrita)
 
+Ao contrário das duas bases acima, esta é uma **URL única** — é o formato
+que o Prisma CLI (`db push`/`migrate`/`db seed`) exige via
+`env("CONTROL_DATABASE_URL")` no `prisma/schema.prisma`.
+
 ```
-CONTROL_DB_HOST=
-CONTROL_DB_PORT=
-CONTROL_DB_NAME=
-CONTROL_DB_USER=
-CONTROL_DB_PASSWORD=
-CONTROL_DB_SSL=true
+CONTROL_DATABASE_URL=postgresql://usuario:senha@host:5432/nome_do_banco
 ```
+
+Exemplo local (Postgres rodando na própria máquina, sem senha/SSL):
+`postgresql://redeis:redeis@localhost:5432/redeis_control`.
+Se a senha tiver caracteres especiais (`@`, `:`, `/`, etc.), faça
+[URL-encode](https://www.urlencoder.org/) só da senha antes de montar a
+URL.
 
 ## 4. Autenticação
 

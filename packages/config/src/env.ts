@@ -43,13 +43,11 @@ export const envSchema = z
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
     RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
 
-    // Banco de controle (próprio, leitura e escrita)
-    CONTROL_DB_HOST: z.string().min(1),
-    CONTROL_DB_PORT: z.coerce.number().int().positive(),
-    CONTROL_DB_NAME: z.string().min(1),
-    CONTROL_DB_USER: z.string().min(1),
-    CONTROL_DB_PASSWORD: z.string().min(1),
-    CONTROL_DB_SSL: boolFromString.default("true"),
+    // Banco de controle (próprio, leitura e escrita). URL única — é o
+    // formato que o Prisma CLI (db push/migrate/seed) exige via
+    // `env("CONTROL_DATABASE_URL")` no schema.prisma, então não a
+    // decompomos em host/porta/etc. como as bases somente-leitura.
+    CONTROL_DATABASE_URL: z.string().min(1),
 
     // Autenticação
     JWT_ACCESS_SECRET: z.string().min(32),
