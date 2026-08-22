@@ -1,5 +1,5 @@
-import { ActivityIndicator, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-import { useState, type ReactElement } from "react";
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import type { ReactElement } from "react";
 import type { VaccinationCardEntry, VaccinationCardResponse } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
@@ -29,7 +29,6 @@ export function VaccinationScreen(): ReactElement {
   const { data, isLoading, error } = useMeQuery<VaccinationCardResponse>("vaccination-card");
   const theme = useTheme();
   const styles = createStyles(theme);
-  const [selected, setSelected] = useState<VaccinationCardEntry | null>(null);
 
   const statusColor: Record<VaccinationCardEntry["status"], string> = {
     administered: theme.colors.success,
@@ -56,55 +55,35 @@ export function VaccinationScreen(): ReactElement {
           {groupByImmunobiologic(data.entries).map(([immunoName, doses]) => (
             <View key={immunoName} style={{ gap: 8 }}>
               <Text style={styles.sectionTitle}>{immunoName}</Text>
-              <View style={styles.grid}>
+              <View style={{ gap: 8 }}>
                 {doses.map((dose) => (
-                  <Pressable key={dose.id} style={styles.gridItem} onPress={() => setSelected(dose)}>
-                    <View style={[styles.card, { borderTopColor: statusColor[dose.status] }]}>
-                      <Text style={styles.doseLabel} numberOfLines={1}>
-                        {dose.doseLabel}
-                      </Text>
-                      <Text style={styles.cardDetail} numberOfLines={1}>
-                        {dose.status === "administered" ? formatDate(dose.administeredAt) : formatDate(dose.dueDate)}
-                      </Text>
+                  <View key={dose.id} style={[styles.card, { borderLeftColor: statusColor[dose.status] }]}>
+                    <View style={styles.cardHeader}>
+                      <Text style={styles.doseLabel}>{dose.doseLabel}</Text>
+                      <View style={[styles.badge, { backgroundColor: statusColor[dose.status] }]}>
+                        <Text style={styles.badgeText}>{STATUS_LABEL[dose.status]}</Text>
+                      </View>
                     </View>
-                  </Pressable>
+                    {dose.status === "administered" ? (
+                      <>
+                        <Text style={styles.cardDetail}>Aplicada em {formatDate(dose.administeredAt)}</Text>
+                        {dose.administeredAtHealthUnit && (
+                          <Text style={styles.cardDetail}>{dose.administeredAtHealthUnit}</Text>
+                        )}
+                        {dose.administeredByProfessional && (
+                          <Text style={styles.cardDetail}>{dose.administeredByProfessional}</Text>
+                        )}
+                      </>
+                    ) : (
+                      <Text style={styles.cardDetail}>Prevista para {formatDate(dose.dueDate)}</Text>
+                    )}
+                  </View>
                 ))}
               </View>
             </View>
           ))}
         </ScrollView>
       )}
-
-      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSelected(null)}>
-          <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
-            {selected && (
-              <>
-                <Text style={styles.modalTitle}>{selected.immunobiologicName}</Text>
-                <View style={styles.modalHeaderRow}>
-                  <Text style={styles.doseLabel}>{selected.doseLabel}</Text>
-                  <View style={[styles.badge, { backgroundColor: statusColor[selected.status] }]}>
-                    <Text style={styles.badgeText}>{STATUS_LABEL[selected.status]}</Text>
-                  </View>
-                </View>
-                {selected.status === "administered" ? (
-                  <View style={{ gap: 2, marginTop: 8 }}>
-                    <Text style={styles.cardDetail}>Aplicada em {formatDate(selected.administeredAt)}</Text>
-                    {selected.administeredAtHealthUnit && (
-                      <Text style={styles.cardDetail}>Local: {selected.administeredAtHealthUnit}</Text>
-                    )}
-                    {selected.administeredByProfessional && (
-                      <Text style={styles.cardDetail}>Profissional: {selected.administeredByProfessional}</Text>
-                    )}
-                  </View>
-                ) : (
-                  <Text style={[styles.cardDetail, { marginTop: 8 }]}>Prevista para {formatDate(selected.dueDate)}</Text>
-                )}
-              </>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -116,25 +95,20 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     error: { color: theme.colors.danger, paddingHorizontal: 20 },
     empty: { color: theme.colors.textSecondary, paddingHorizontal: 20 },
     sectionTitle: { fontSize: 14, fontWeight: "700", color: theme.colors.textPrimary },
-    grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 },
-    gridItem: { width: "33.33%", padding: 4 },
     card: {
       backgroundColor: theme.colors.surface,
-      borderRadius: 10,
-      borderTopWidth: 4,
-      padding: 10,
+      borderRadius: 12,
+      borderLeftWidth: 4,
+      padding: 12,
       gap: 2,
       shadowColor: "#000",
       shadowOpacity: 0.04,
       shadowRadius: 6,
     },
-    doseLabel: { fontSize: 12, fontWeight: "600", color: theme.colors.textPrimary },
+    cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    doseLabel: { fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary },
     badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
     badgeText: { fontSize: 10, fontWeight: "700", color: "#FFFFFF" },
-    cardDetail: { fontSize: 11, color: theme.colors.textSecondary },
-    modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-    modalCard: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
-    modalTitle: { fontSize: 15, fontWeight: "700", color: theme.colors.textPrimary, marginBottom: 8 },
-    modalHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    cardDetail: { fontSize: 12, color: theme.colors.textSecondary },
   });
 }
