@@ -12,19 +12,14 @@ function normalizePhoneNumber(contact: string): string {
 
 /**
  * Envia o código via WhatsApp Business Cloud API (Meta), usando um template
- * de autenticação pré-aprovado — obrigatório para o primeiro contato com o
- * usuário, já que mensagem de texto livre só é permitida dentro de uma
- * janela de 24h após o cliente escrever primeiro.
+ * da categoria "Autenticação" com o botão nativo "Copiar código" — o
+ * formato que a Meta exige hoje para templates de OTP. Além da variável no
+ * corpo, o botão de "copiar código" precisa do próprio componente `button`
+ * com `sub_type: "url"` recebendo o mesmo código.
  *
  * Requer: WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_API_TOKEN (token permanente de
  * um System User, não o token de teste de 24h), WHATSAPP_TEMPLATE_NAME e
  * WHATSAPP_TEMPLATE_LANGUAGE (ex.: "pt_BR").
- *
- * Assume um template com uma única variável no corpo (o código). Se o seu
- * template de autenticação também tiver o botão "Copiar código"
- * (recurso nativo de OTP da Meta), adicione um segundo componente ao body
- * abaixo:
- *   { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] }
  */
 @Injectable()
 export class WhatsappProvider implements OtpChannelSender {
@@ -65,6 +60,12 @@ export class WhatsappProvider implements OtpChannelSender {
           components: [
             {
               type: "body",
+              parameters: [{ type: "text", text: code }],
+            },
+            {
+              type: "button",
+              sub_type: "url",
+              index: "0",
               parameters: [{ type: "text", text: code }],
             },
           ],
