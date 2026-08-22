@@ -73,8 +73,25 @@ interface FieldOption {
   isAvailable?: (channel: AuthChannel) => boolean;
 }
 
-function pickRandom<T>(items: T[], count: number, exclude: T[] = []): T[] {
-  const pool = items.filter((i) => !exclude.includes(i));
+/**
+ * Uppercase + sem acento, só para COMPARAR — nunca para exibir (perderia a
+ * grafia correta em português). Os dados reais do paciente às vezes vêm
+ * inteiramente em caixa alta e sem acento de sistemas legados, então
+ * "JOSE" (real) e "José" (distrator) são o mesmo nome mas não batem numa
+ * comparação de string simples — o que deixava a opção certa por chances
+ * duplicada na lista, ou identificável só pela diferença de formatação.
+ */
+function normalizeForCompare(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .trim();
+}
+
+function pickRandom(items: string[], count: number, exclude: string[] = []): string[] {
+  const excludeNormalized = exclude.map(normalizeForCompare);
+  const pool = items.filter((i) => !excludeNormalized.includes(normalizeForCompare(i)));
   const shuffled = shuffle(pool);
   return shuffled.slice(0, count);
 }
@@ -278,9 +295,13 @@ export class QuestionnaireService {
     return chosen.map((field) => {
       const correct = field.buildCorrect(profile)!;
       const correctOptionId = randomUUID();
+      // Caixa alta em todas as opções: dados reais do paciente às vezes vêm
+      // inteiramente em maiúsculas de sistemas legados, enquanto os
+      // distratores sintéticos são escritos em caixa normal — a diferença
+      // de formatação sozinha já entregava qual era a resposta certa.
       const options = shuffle([
-        { id: correctOptionId, label: correct },
-        ...field.buildDistractors(correct).map((label) => ({ id: randomUUID(), label })),
+        { id: correctOptionId, label: correct.toUpperCase() },
+        ...field.buildDistractors(correct).map((label) => ({ id: randomUUID(), label: label.toUpperCase() })),
       ]);
       return { field: field.key, prompt: field.prompt, correctOptionId, options };
     });
@@ -397,13 +418,27 @@ export class QuestionnaireService {
     });
 
     if (passed && attempt.sourceSystem && attempt.sourcePatientId) {
-      await this.prisma.patientLink.create({
-        data: {
-          userId,
-          sourceSystem: attempt.sourceSystem,
-          sourcePatientId: attempt.sourcePatientId,
-        },
-      });
+      // upsert (não create): reenviar o mesmo attempt (ex.: retry de rede)
+      // não pode virar erro. O que precisa virar erro claro é o OUTRO
+      // unique ([sourceSystem, sourcePatientId]) — esse mesmo cadastro já
+      // vinculado a uma conta diferente — capturado abaixo em vez de
+      // deixar subir como 500 genérico (Prisma P2002).
+      await this.prisma.patientLink
+        .upsert({
+          where: { userId },
+          create: { userId, sourceSystem: attempt.sourceSystem, sourcePatientId: attempt.sourcePatientId },
+          update: { sourceSystem: attempt.sourceSystem, sourcePatientId: attempt.sourcePatientId },
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.error(`Falha ao vincular cadastro (${attemptId}): ${message}`);
+          if (message.includes("sourceSystem") || message.includes("sourcePatientId")) {
+            throw new BadRequestException(
+              "Este cadastro já está vinculado a outra conta. Procure o suporte do seu município.",
+            );
+          }
+          throw err;
+        });
       await this.prisma.platformUser.update({ where: { id: userId }, data: { status: "ACTIVE" } });
     }
 
