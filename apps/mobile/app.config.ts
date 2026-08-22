@@ -1,7 +1,13 @@
 import type { ExpoConfig, ConfigContext } from "expo/config";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TenantTheme } from "@rede-is/theme-tokens";
+// Import direto do submódulo (não do barrel "@rede-is/theme-tokens") porque
+// o carregador de config do Expo executa este arquivo com a resolução ESM
+// nativa do Node, que — ao contrário do Metro (bundler do app em si) e do
+// tsc/ts-node-dev usados no resto do monorepo — exige extensão de arquivo
+// explícita em imports relativos. O barrel (`src/index.ts`) reexporta
+// `./schema` sem extensão, o que quebra só nesse carregamento específico.
+import { TenantTheme } from "@rede-is/theme-tokens/src/schema.ts";
 
 /**
  * White-label em tempo de build: cada compilação (`eas build --profile

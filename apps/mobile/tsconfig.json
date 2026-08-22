@@ -5,7 +5,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    // Necessário só por causa do import com extensão explícita em
+    // app.config.ts (ver comentário lá) — o carregador de config do Expo
+    // roda esse arquivo fora do Metro, com a resolução ESM nativa do Node.
+    "allowImportingTsExtensions": true
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }
