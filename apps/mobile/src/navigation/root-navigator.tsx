@@ -1,6 +1,7 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/theme/theme-provider";
@@ -33,17 +34,37 @@ export type MainTabParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+const TAB_ICONS: Record<keyof MainTabParamList, { focused: keyof typeof Ionicons.glyphMap; outline: keyof typeof Ionicons.glyphMap }> = {
+  Dashboard: { focused: "home", outline: "home-outline" },
+  Agendamentos: { focused: "calendar", outline: "calendar-outline" },
+  Atendimentos: { focused: "medkit", outline: "medkit-outline" },
+  Documentos: { focused: "document-text", outline: "document-text-outline" },
+  Alertas: { focused: "notifications", outline: "notifications-outline" },
+  Unidades: { focused: "business", outline: "business-outline" },
+  Perfil: { focused: "person", outline: "person-outline" },
+};
+
 function MainTabs() {
   const theme = useTheme();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false, tabBarActiveTintColor: theme.colors.primary }}>
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarLabelStyle: { fontSize: 10 },
+        tabBarIcon: ({ focused, color, size }) => {
+          const icon = TAB_ICONS[route.name];
+          return <Ionicons name={focused ? icon.focused : icon.outline} color={color} size={size} />;
+        },
+      })}
+    >
       <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: "Início" }} />
-      <Tab.Screen name="Agendamentos" component={AppointmentsScreen} />
-      <Tab.Screen name="Atendimentos" component={AttendancesScreen} />
-      <Tab.Screen name="Documentos" component={DocumentsScreen} />
-      <Tab.Screen name="Alertas" component={AlertsScreen} />
-      <Tab.Screen name="Unidades" component={HealthUnitsScreen} />
-      <Tab.Screen name="Perfil" component={ProfileScreen} />
+      <Tab.Screen name="Agendamentos" component={AppointmentsScreen} options={{ title: "Agenda" }} />
+      <Tab.Screen name="Atendimentos" component={AttendancesScreen} options={{ title: "Atend." }} />
+      <Tab.Screen name="Documentos" component={DocumentsScreen} options={{ title: "Docs" }} />
+      <Tab.Screen name="Alertas" component={AlertsScreen} options={{ title: "Alertas" }} />
+      <Tab.Screen name="Unidades" component={HealthUnitsScreen} options={{ title: "Unidades" }} />
+      <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: "Perfil" }} />
     </Tab.Navigator>
   );
 }
