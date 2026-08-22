@@ -76,14 +76,12 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
   }
 
   /**
-   * Confirmado contra o catálogo completo de `sotech.cdg_paciente`
-   * (information_schema.columns): `mae`/`pai` (nome completo, texto livre),
+   * Confirmado contra o DDL real de `sotech.cdg_paciente` (create table +
+   * comentários de coluna): `mae`/`pai` (nome completo, texto livre),
    * `endereco` (rua/logradouro, texto livre — `numero`/`complemento`/`cep`
-   * não são necessários para a pergunta do questionário) e `ativo`.
-   * `fknaturalidade` — ATENÇÃO(inferido): assumido como FK para
-   * `sotech.tbn_municipio.pkmunicipio`, pela mesma convenção confirmada de
-   * `fkcidade` (ver atend_is.sql: `join tbn_municipio m on m.pkmunicipio =
-   * p.fkcidade`) — não testado diretamente contra o banco real.
+   * não são necessários para a pergunta do questionário) e `fknaturalidade`
+   * → `sotech.tbn_municipio.pkmunicipio` (confirmado pelo comentário da
+   * própria coluna, mesma tabela de `fkcidade`).
    */
   async getIdentityProfile(sourcePatientId: string): Promise<IdentityProfile | null> {
     const rows = await this.pool.query<{
