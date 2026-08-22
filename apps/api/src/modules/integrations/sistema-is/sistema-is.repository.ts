@@ -12,10 +12,12 @@ import type {
 /**
  * Repositório somente-leitura do Sistema IS.
  *
- * TODO(db-mapping): as queries abaixo são placeholders — o mapeamento real
- * de tabelas/colunas será feito junto com o acesso à base (ver
- * ARCHITECTURE.md). Preencha cada método conforme o mapeamento for
- * confirmado, mantendo sempre `SELECT` puro e parâmetros bindados.
+ * `sotech.cdg_paciente` (nome, CPF, CNS, nascimento, bairro via
+ * `sotech.tbn_bairro`) confirmado contra queries reais de um projeto de BI
+ * do mesmo cliente que já usa essa base em produção. `findPatientByCpf`,
+ * `findAppointmentsByPatient` etc. abaixo continuam placeholders — mapear
+ * cada um conforme for confirmado, mantendo sempre `SELECT` puro e
+ * parâmetros bindados.
  */
 @Injectable()
 export class SistemaIsRepository implements PatientSourceRepository, OnModuleDestroy {
@@ -56,20 +58,62 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
   }
 
   /**
-   * TODO(db-mapping): a tabela é `sotech.cdg_paciente`, mas ainda não
-   * tenho as colunas reais (nome, telefone, e-mail). Preencher assim que
-   * o schema for confirmado — ver questão pendente no chat. Lança em vez
-   * de retornar vazio para que o chamador (QuestionnaireService) consiga
-   * distinguir "não encontrado de verdade" de "essa base ainda não está
-   * mapeada" — ver o detalhe [DEV] na mensagem de erro do questionário.
+   * ATENÇÃO(verificar colunas): tabela e colunas de nome/CPF/CNS/nascimento
+   * confirmadas a partir de queries reais em produção (projeto de BI de
+   * estoque/atendimento do mesmo cliente, que já consulta
+   * `sotech.cdg_paciente` extensivamente). O que NÃO está confirmado ainda
+   * é telefone/e-mail: esse BI nunca precisou de contato do paciente
+   * (só estoque e indicadores agregados), então essas colunas não aparecem
+   * em nenhuma query existente. Falta o nome real da(s) coluna(s) de
+   * telefone/celular/e-mail em `sotech.cdg_paciente` (ou confirmar que o
+   * Sistema IS não guarda contato do paciente, e a busca por contato
+   * dependeria só do e-SUS PEC para esse caso).
    */
   async findIdentityCandidatesByContact(_contact: string): Promise<IdentityCandidate[]> {
-    throw new Error("TODO(db-mapping): mapear busca de identidade por contato em sotech.cdg_paciente");
+    throw new Error(
+      "TODO(db-mapping): coluna(s) de telefone/e-mail em sotech.cdg_paciente ainda não confirmadas",
+    );
   }
 
-  /** TODO(db-mapping): idem — precisa das colunas de sotech.cdg_paciente. */
-  async getIdentityProfile(_sourcePatientId: string): Promise<IdentityProfile | null> {
-    throw new Error("TODO(db-mapping): mapear perfil de identidade em sotech.cdg_paciente");
+  /**
+   * ATENÇÃO(verificar colunas): confirmado contra queries reais em produção
+   * — `sotech.cdg_paciente` (pkpaciente, paciente, cpf, cns, datanascimento,
+   * fkbairro, fksexo) e `sotech.tbn_bairro` (pkbairro, bairro) para o bairro
+   * de residência. motherName/fatherName/birthCity/streets/mobilePhones/
+   * emails continuam null/vazios — nenhuma query do BI de referência toca
+   * nesses campos (só estoque/indicadores agregados, não cadastro completo).
+   */
+  async getIdentityProfile(sourcePatientId: string): Promise<IdentityProfile | null> {
+    const rows = await this.pool.query<{
+      pkpaciente: string;
+      paciente: string;
+      cpf: string | null;
+      datanascimento: string | null;
+      bairro: string | null;
+    }>(
+      `SELECT p.pkpaciente, p.paciente, p.cpf, p.datanascimento, bai.bairro
+       FROM sotech.cdg_paciente p
+       LEFT JOIN sotech.tbn_bairro bai ON bai.pkbairro = p.fkbairro
+       WHERE p.pkpaciente = $1`,
+      [sourcePatientId],
+    );
+
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      sourcePatientId: row.pkpaciente,
+      name: row.paciente,
+      motherName: null,
+      fatherName: null,
+      birthDate: row.datanascimento,
+      birthCity: null,
+      cpf: row.cpf,
+      streets: [],
+      neighborhoods: row.bairro ? [row.bairro] : [],
+      mobilePhones: [],
+      emails: [],
+    };
   }
 
   async onModuleDestroy() {
