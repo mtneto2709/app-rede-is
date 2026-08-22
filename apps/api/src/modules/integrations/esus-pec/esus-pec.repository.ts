@@ -11,9 +11,27 @@ import type {
   PatientSourceRepository,
 } from "../../../common/database/patient-source-repository.interface";
 
-/** Uma dose de vacina administrada — usado só por VaccinationService, não faz parte do contrato compartilhado (vacinação hoje é e-SUS PEC apenas). */
-export interface AdministeredVaccine {
+/**
+ * Uma entrada do calendário vacinal do e-SUS (`tb_calendario_vacinal` +
+ * `tb_regra_vacinal_estrategia` + `tb_faixa_etaria_vacinacao`) — usado só
+ * por VaccinationService, não faz parte do contrato compartilhado
+ * (vacinação hoje é e-SUS PEC apenas).
+ */
+export interface VaccinationCalendarSlot {
+  immunobiologicId: string;
   immunobiologicName: string;
+  doseId: string;
+  doseLabel: string;
+  /** Dias desde o nascimento em que a dose é recomendada — null quando não há regra de faixa etária associada. */
+  ageStartDays: number | null;
+}
+
+/** Uma dose de vacina administrada, já casada com o imunobiológico/dose do catálogo quando possível. */
+export interface AdministeredVaccine {
+  immunobiologicId: string | null;
+  immunobiologicName: string;
+  doseId: string | null;
+  doseLabel: string | null;
   administeredAt: string;
   healthUnitName: string | null;
   professionalName: string | null;
@@ -26,9 +44,12 @@ export interface AdministeredVaccine {
  * atendimentos) e `public.tb_unidade_saude` (nome das unidades) mapeados a
  * partir de uma query real em produção (projeto de BI de estoque/
  * atendimento do mesmo cliente — ver SistemaIsRepository/questionário).
- * `findAdministeredVaccines` é inferido, não confirmado (ver seu próprio
- * comentário). `findPatientByCpf`, `findDocumentsByPatient` etc. continuam
- * placeholders.
+ * `findVaccinationCalendar`/`findAdministeredVaccines` confirmados contra o
+ * catálogo real de colunas do schema de vacinação (information_schema —
+ * tb_calendario_vacinal, tb_regra_vacinal_estrategia,
+ * tb_faixa_etaria_vacinacao, tb_imunobiologico, tb_dose_imunobiologico,
+ * tb_vacinacao, tb_registro_vacinacao). `findPatientByCpf`,
+ * `findDocumentsByPatient` etc. continuam placeholders.
  */
 @Injectable()
 export class EsusPecRepository implements PatientSourceRepository, OnModuleDestroy {
@@ -168,43 +189,97 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * ATENÇÃO(não confirmado): não consegui confirmar o nome real da tabela
-   * de vacinação — nem o mapeamento do Sistema IS nem a referência de BI
-   * anterior cobrem esse módulo, e a documentação técnica oficial do e-SUS
-   * está bloqueada pela rede deste ambiente. Escrito por inferência a
-   * partir do layout de envio de dados (LEDI) de vacinação do e-SUS PEC
-   * (campos imunobiologico/estrategiaVacinacao/dose/lote/fabricante — ver
-   * laboratoriobridge/esusaps-integracao no GitHub) e da convenção de nomes
-   * já confirmada em tb_atend/tb_atend_prof/tb_prontuario. Se o nome da
-   * tabela ou de alguma coluna estiver errado, essa query falha — o
-   * chamador (VaccinationService, via PatientsService) captura o erro e
-   * degrada para mostrar só o calendário vacinal, sem nenhuma dose marcada
-   * como tomada, em vez de quebrar a tela inteira.
+   * Confirmado: `public.tb_calendario_vacinal` liga imunobiológico + dose
+   * (`tb_imunobiologico`/`tb_dose_imunobiologico`) com ordem de exibição
+   * (`nu_ordem_imunobiologico`/`nu_ordem_dose`), e `tb_regra_vacinal_estrategia`
+   * liga essa mesma dupla a uma faixa etária (`tb_faixa_etaria_vacinacao`,
+   * que já vem em dias desde o nascimento — `nu_dias_inicio`). Uma dupla
+   * imunobiológico+dose pode ter mais de uma regra (estratégias diferentes,
+   * ex. rotina vs. campanha) — o DISTINCT ON pega a de menor
+   * `nu_dias_inicio` como referência.
+   */
+  async findVaccinationCalendar(): Promise<VaccinationCalendarSlot[]> {
+    const rows = await this.pool.query<{
+      immunobiologic_id: string;
+      immunobiologic_name: string;
+      dose_id: string;
+      dose_label: string;
+      age_start_days: number | null;
+    }>(
+      `SELECT immunobiologic_id, immunobiologic_name, dose_id, dose_label, age_start_days
+       FROM (
+         SELECT DISTINCT ON (cal.co_imunobiologico, cal.co_dose_imunobiologico)
+           cal.co_imunobiologico::text AS immunobiologic_id,
+           imuno.no_imunobiologico AS immunobiologic_name,
+           cal.co_dose_imunobiologico::text AS dose_id,
+           dose.no_dose_imunobiologico AS dose_label,
+           cal.nu_ordem_imunobiologico,
+           cal.nu_ordem_dose,
+           fx.nu_dias_inicio AS age_start_days
+         FROM public.tb_calendario_vacinal cal
+         INNER JOIN public.tb_imunobiologico imuno ON imuno.co_imunobiologico = cal.co_imunobiologico
+         INNER JOIN public.tb_dose_imunobiologico dose ON dose.co_dose_imunobiologico = cal.co_dose_imunobiologico
+         LEFT JOIN public.tb_regra_vacinal_estrategia regra
+           ON regra.co_imunobiologico = cal.co_imunobiologico AND regra.co_dose_imunobiologico = cal.co_dose_imunobiologico
+         LEFT JOIN public.tb_faixa_etaria_vacinacao fx ON fx.co_faixa_etaria_vacinacao = regra.co_faixa_etaria_vacinacao
+         WHERE imuno.st_ativo = 1
+         ORDER BY cal.co_imunobiologico, cal.co_dose_imunobiologico, fx.nu_dias_inicio ASC NULLS LAST
+       ) ranked
+       ORDER BY nu_ordem_imunobiologico, nu_ordem_dose`,
+    );
+
+    return rows.map((row) => ({
+      immunobiologicId: row.immunobiologic_id,
+      immunobiologicName: row.immunobiologic_name,
+      doseId: row.dose_id,
+      doseLabel: row.dose_label,
+      ageStartDays: row.age_start_days,
+    }));
+  }
+
+  /**
+   * Confirmado: `public.tb_registro_vacinacao` (uma linha por dose
+   * aplicada, com `co_imunobiologico`/`co_dose_imunobiologico` — os mesmos
+   * códigos do calendário) liga a `tb_vacinacao` (a visita de vacinação,
+   * com `co_prontuario` e `co_atend_prof` diretos). Unidade/profissional
+   * seguem o mesmo caminho já confirmado em findAttendanceRows
+   * (`tb_atend_prof` → `tb_atend`/`tb_lotacao`/`tb_prof`).
    */
   async findAdministeredVaccines(patientId: string): Promise<AdministeredVaccine[]> {
     const rows = await this.pool.query<{
-      immunobiologic_name: string;
+      immunobiologic_id: string | null;
+      immunobiologic_name: string | null;
+      dose_id: string | null;
+      dose_label: string | null;
       administered_at: string;
       health_unit_name: string | null;
       professional_name: string | null;
     }>(
-      `SELECT imuno.no_imunobiologico AS immunobiologic_name, ap.dt_inicio AS administered_at,
+      `SELECT reg.co_imunobiologico::text AS immunobiologic_id, imuno.no_imunobiologico AS immunobiologic_name,
+              reg.co_dose_imunobiologico::text AS dose_id, dose.no_dose_imunobiologico AS dose_label,
+              reg.dt_aplicacao AS administered_at,
               us.no_unidade_saude AS health_unit_name, prof.no_civil_profissional AS professional_name
-       FROM public.tb_vacinacao v
-       INNER JOIN public.tb_atend_prof ap ON ap.co_seq_atend_prof = v.co_atend_prof
-       INNER JOIN public.tb_atend a ON a.co_seq_atend = ap.co_atend
-       INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = a.co_prontuario
-       LEFT JOIN public.tb_imunobiologico imuno ON imuno.co_seq_imunobiologico = v.co_imunobiologico
+       FROM public.tb_registro_vacinacao reg
+       INNER JOIN public.tb_vacinacao v ON v.co_seq_vacinacao = reg.co_vacinacao
+       INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = v.co_prontuario
+       LEFT JOIN public.tb_imunobiologico imuno ON imuno.co_imunobiologico = reg.co_imunobiologico
+       LEFT JOIN public.tb_dose_imunobiologico dose ON dose.co_dose_imunobiologico = reg.co_dose_imunobiologico
+       LEFT JOIN public.tb_atend_prof ap ON ap.co_seq_atend_prof = v.co_atend_prof
+       LEFT JOIN public.tb_atend a ON a.co_seq_atend = ap.co_atend
        LEFT JOIN public.tb_unidade_saude us ON us.co_seq_unidade_saude = a.co_unidade_saude
        LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = ap.co_lotacao
        LEFT JOIN public.tb_prof prof ON prof.co_seq_prof = l.co_prof
-       WHERE pront.co_cidadao = $1
-       ORDER BY ap.dt_inicio ASC`,
+       WHERE pront.co_cidadao = $1 AND reg.dt_aplicacao IS NOT NULL
+       ORDER BY reg.dt_aplicacao ASC
+       LIMIT 500`,
       [patientId],
     );
 
     return rows.map((row) => ({
-      immunobiologicName: row.immunobiologic_name,
+      immunobiologicId: row.immunobiologic_id,
+      immunobiologicName: row.immunobiologic_name ?? "Imunobiológico não identificado",
+      doseId: row.dose_id,
+      doseLabel: row.dose_label,
       administeredAt: row.administered_at,
       healthUnitName: row.health_unit_name,
       professionalName: row.professional_name,

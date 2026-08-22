@@ -65,9 +65,25 @@ function MainTabs() {
       <Tab.Screen name="Agendamentos" component={AppointmentsScreen} options={{ title: "Agenda" }} />
       <Tab.Screen name="Atendimentos" component={AttendancesScreen} options={{ title: "Atend." }} />
       <Tab.Screen name="Documentos" component={DocumentsScreen} options={{ title: "Docs" }} />
-      <Tab.Screen name="Vacinacao" component={VaccinationScreen} options={{ title: "Vacinas" }} />
+      {/*
+        Vacinação e Unidades ficam FORA da barra (mesmo padrão do web —
+        bottom-nav.tsx só tem Início/Agenda/Docs/Alertas/Perfil, o resto é
+        acessado pela grade "Serviços" da home). Continuam navegáveis por
+        navigation.navigate("Vacinacao"/"Unidades") a partir do
+        DashboardScreen — só não aparecem como ícone na barra, pra não
+        lotar ainda mais uma barra que já tem 6 itens visíveis.
+      */}
+      <Tab.Screen
+        name="Vacinacao"
+        component={VaccinationScreen}
+        options={{ title: "Vacinas", tabBarButton: () => null }}
+      />
       <Tab.Screen name="Alertas" component={AlertsScreen} options={{ title: "Alertas" }} />
-      <Tab.Screen name="Unidades" component={HealthUnitsScreen} options={{ title: "Unidades" }} />
+      <Tab.Screen
+        name="Unidades"
+        component={HealthUnitsScreen}
+        options={{ title: "Unidades", tabBarButton: () => null }}
+      />
       <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: "Perfil" }} />
     </Tab.Navigator>
   );
