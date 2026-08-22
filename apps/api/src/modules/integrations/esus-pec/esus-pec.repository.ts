@@ -3,6 +3,7 @@ import { getEsusPecConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
+import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
 import type {
   IdentityCandidate,
   IdentityProfile,
@@ -12,10 +13,11 @@ import type {
 /**
  * Repositório somente-leitura do e-SUS PEC.
  *
- * TODO(db-mapping): mesma observação do SistemaIsRepository — o schema real
- * do e-SUS PEC (tabelas `tb_cidadao`, `tb_atendimento_domiciliar`, etc. na
- * instalação padrão, mas cada município pode customizar) será mapeado
- * junto com você.
+ * `public.tb_atend`/`tb_atend_prof`/`tb_prontuario` (histórico de
+ * atendimentos) mapeados a partir de uma query real em produção (projeto de
+ * BI de estoque/atendimento do mesmo cliente — ver
+ * SistemaIsRepository/questionário). `findPatientByCpf`,
+ * `findDocumentsByPatient`, `findHealthUnits` etc. continuam placeholders.
  */
 @Injectable()
 export class EsusPecRepository implements PatientSourceRepository, OnModuleDestroy {
@@ -35,14 +37,87 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     throw new Error("TODO(db-mapping): mapear busca de cidadão por contato no e-SUS PEC");
   }
 
-  async findAppointmentsByPatient(_patientId: string): Promise<Appointment[]> {
-    // TODO(db-mapping): SELECT ... FROM <tabela_agenda> WHERE co_cidadao = $1
-    return [];
+  /**
+   * ATENÇÃO(sem dado de agenda futura): não há, na referência disponível,
+   * nenhuma tabela de agendamento/agenda futura do e-SUS PEC mapeada (o
+   * módulo de agenda da equipe é bem mais complexo — regras de recorrência,
+   * cotas por profissional etc.). Enquanto isso não for mapeado, devolve o
+   * histórico de atendimentos JÁ REALIZADOS com status "completed" — dá pra
+   * tela de agendamentos mostrar consultas passadas reais em vez de ficar
+   * vazia, mas nenhuma consulta futura ainda marcada aparece aqui.
+   */
+  async findAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
+    const rows = await this.findAttendanceRows(patientId);
+    return rows.map((row) => ({
+      id: row.co_seq_atend_prof,
+      patientId,
+      professionalName: row.no_civil_profissional,
+      specialty: row.no_cbo,
+      scheduledAt: row.dt_inicio,
+      status: "completed" as const,
+      type: classifyAppointmentType(row.no_tipo_atend),
+      healthUnitId: row.co_unidade_saude,
+      sourceSystem: "esus-pec" as const,
+    }));
   }
 
-  async findAttendancesByPatient(_patientId: string): Promise<Attendance[]> {
-    // TODO(db-mapping): SELECT ... FROM <tabela_atendimento> WHERE co_cidadao = $1
-    return [];
+  /**
+   * Confirmado contra uma query real em produção (mesma referência de
+   * `getIdentityProfile`) — `tb_atend` (encontro) + `tb_atend_prof` (um
+   * profissional dentro do encontro; a granularidade usada aqui, igual à
+   * query original) + `tb_prontuario` (liga ao `co_cidadao`) + CID via
+   * `rl_evolucao_avaliacao_ciap_cid`/`tb_cid10`. `prescription` fica null —
+   * não há, na referência disponível, uma tabela de prescrição mapeada.
+   */
+  async findAttendancesByPatient(patientId: string): Promise<Attendance[]> {
+    const rows = await this.findAttendanceRows(patientId);
+    return rows.map((row) => ({
+      id: row.co_seq_atend_prof,
+      patientId,
+      professionalName: row.no_civil_profissional,
+      specialty: row.no_cbo,
+      occurredAt: row.dt_inicio,
+      diagnosis: row.cid10s && row.cid10s.length > 0 ? row.cid10s.join(", ") : null,
+      prescription: null,
+      healthUnitId: row.co_unidade_saude,
+      type: classifyAttendanceType(row.no_tipo_atend),
+      sourceSystem: "esus-pec" as const,
+    }));
+  }
+
+  private async findAttendanceRows(patientId: string): Promise<
+    {
+      co_seq_atend_prof: string;
+      dt_inicio: string;
+      co_unidade_saude: string | null;
+      no_civil_profissional: string | null;
+      no_cbo: string | null;
+      no_tipo_atend: string | null;
+      cid10s: string[] | null;
+    }[]
+  > {
+    return this.pool.query(
+      `SELECT ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio, a.co_unidade_saude::text AS co_unidade_saude,
+              prof.no_civil_profissional, cbo.no_cbo, ta.no_tipo_atend,
+              cid_a.cid10s
+       FROM public.tb_atend a
+       INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = a.co_prontuario
+       INNER JOIN public.tb_atend_prof ap ON ap.co_atend = a.co_seq_atend
+       LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = ap.co_lotacao
+       LEFT JOIN public.tb_prof prof ON prof.co_seq_prof = l.co_prof
+       LEFT JOIN public.tb_cbo cbo ON cbo.co_cbo = l.co_cbo
+       LEFT JOIN public.tb_tipo_atend ta ON ap.tp_atend_prof = ta.co_tipo_atend
+       LEFT JOIN LATERAL (
+         SELECT array_agg(DISTINCT cid.no_cid10::text) AS cid10s
+         FROM public.rl_evolucao_avaliacao_ciap_cid r
+         INNER JOIN public.tb_cid10 cid ON cid.co_cid10 = r.co_cid10
+         WHERE r.co_atend_prof = ap.co_seq_atend_prof
+       ) cid_a ON true
+       WHERE pront.co_cidadao = $1
+       ORDER BY ap.dt_inicio DESC NULLS LAST
+       LIMIT 200`,
+      [patientId],
+    );
   }
 
   async findDocumentsByPatient(_patientId: string): Promise<Document[]> {

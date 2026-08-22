@@ -3,6 +3,7 @@ import { getSistemaIsConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
+import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
 import type {
   IdentityCandidate,
   IdentityProfile,
@@ -13,13 +14,14 @@ import type {
  * Repositório somente-leitura do Sistema IS.
  *
  * `sotech.cdg_paciente` (nome, CPF, CNS, nascimento, mãe, pai, endereço,
- * bairro via `sotech.tbn_bairro`, naturalidade via `sotech.tbn_municipio`)
- * e `sotech.cdg_contato` (telefone/e-mail, ligado por `fkpaciente`) mapeados
- * a partir do DDL real das tabelas e de queries reais de um projeto de BI
- * do mesmo cliente que já usa essa base em produção. `findPatientByCpf`,
- * `findAppointmentsByPatient` etc. abaixo continuam placeholders — mapear
- * cada um conforme for confirmado, mantendo sempre `SELECT` puro e
- * parâmetros bindados.
+ * bairro via `sotech.tbn_bairro`, naturalidade via `sotech.tbn_municipio`),
+ * `sotech.cdg_contato` (telefone/e-mail, ligado por `fkpaciente`) e
+ * `sotech.ate_atendimento` (histórico de atendimentos, incl. internações)
+ * mapeados a partir do DDL real das tabelas e de queries reais de um
+ * projeto de BI do mesmo cliente que já usa essa base em produção.
+ * `findPatientByCpf`, `findDocumentsByPatient`, `findHealthUnits` etc.
+ * continuam placeholders — mapear cada um conforme for confirmado,
+ * mantendo sempre `SELECT` puro e parâmetros bindados.
  */
 @Injectable()
 export class SistemaIsRepository implements PatientSourceRepository, OnModuleDestroy {
@@ -39,14 +41,76 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
     throw new Error("TODO(db-mapping): mapear busca de paciente por contato no Sistema IS");
   }
 
-  async findAppointmentsByPatient(_patientId: string): Promise<Appointment[]> {
-    // TODO(db-mapping): SELECT ... FROM <tabela_agendamentos> WHERE paciente_id = $1
-    return [];
+  /**
+   * ATENÇÃO(sem dado de agenda futura): mesma observação do
+   * EsusPecRepository — não há, na referência disponível, tabela de
+   * agendamento futuro do Sistema IS mapeada. Devolve o histórico de
+   * atendimentos já realizados com status "completed" enquanto isso não é
+   * mapeado.
+   */
+  async findAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
+    const rows = await this.findAttendanceRows(patientId);
+    return rows.map((row) => ({
+      id: row.pkatendimento,
+      patientId,
+      professionalName: row.interveniente,
+      specialty: row.especialidade,
+      scheduledAt: row.dataentrada,
+      status: "completed" as const,
+      type: classifyAppointmentType(row.tipoatendimento),
+      healthUnitId: row.fkunidadesaude,
+      sourceSystem: "sistema-is" as const,
+    }));
   }
 
-  async findAttendancesByPatient(_patientId: string): Promise<Attendance[]> {
-    // TODO(db-mapping): SELECT ... FROM <tabela_atendimentos> WHERE paciente_id = $1
-    return [];
+  /**
+   * Confirmado contra uma query real em produção (mesma referência de
+   * getIdentityProfile) — `sotech.ate_atendimento` + `cdg_unidadesaude` +
+   * `tbn_especialidade` + `cdg_interveniente` + `tbl_tipoatendimento`.
+   * Inclui internações (fktipoatendimento = 2) junto com os demais tipos de
+   * atendimento — são atendimentos de verdade, fazem parte do histórico.
+   * `diagnosis`/`prescription` ficam null: `ate_atendimento` tem
+   * `fkcidprincipal`/`fkcidsecundario`, mas a tabela de CID
+   * (`sotech.tbn_cid`) não teve sua coluna de descrição confirmada ainda.
+   */
+  async findAttendancesByPatient(patientId: string): Promise<Attendance[]> {
+    const rows = await this.findAttendanceRows(patientId);
+    return rows.map((row) => ({
+      id: row.pkatendimento,
+      patientId,
+      professionalName: row.interveniente,
+      specialty: row.especialidade,
+      occurredAt: row.dataentrada,
+      diagnosis: null,
+      prescription: null,
+      healthUnitId: row.fkunidadesaude,
+      type: classifyAttendanceType(row.tipoatendimento),
+      sourceSystem: "sistema-is" as const,
+    }));
+  }
+
+  private async findAttendanceRows(patientId: string): Promise<
+    {
+      pkatendimento: string;
+      dataentrada: string;
+      fkunidadesaude: string | null;
+      interveniente: string | null;
+      especialidade: string | null;
+      tipoatendimento: string | null;
+    }[]
+  > {
+    return this.pool.query(
+      `SELECT a.pkatendimento::text AS pkatendimento, a.dataentrada, a.fkunidadesaude::text AS fkunidadesaude,
+              prof.interveniente, esp.especialidade, ta.tipoatendimento
+       FROM sotech.ate_atendimento a
+       LEFT JOIN sotech.tbn_especialidade esp ON esp.pkespecialidade = a.fkespecialidade
+       LEFT JOIN sotech.cdg_interveniente prof ON prof.pkinterveniente = a.fkprofissionalatendimento
+       LEFT JOIN sotech.tbl_tipoatendimento ta ON ta.pktipoatendimento = a.fktipoatendimento
+       WHERE a.fkpaciente = $1 AND coalesce(a.ativo, true) = true
+       ORDER BY a.dataentrada DESC NULLS LAST
+       LIMIT 200`,
+      [patientId],
+    );
   }
 
   async findDocumentsByPatient(_patientId: string): Promise<Document[]> {
