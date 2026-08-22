@@ -1,4 +1,5 @@
 import { ActivityIndicator, FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import type { StyleProp, ViewStyle } from "react-native";
 import { useTheme } from "@/theme/theme-provider";
 
 interface Props<T> {
@@ -41,19 +42,22 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
   });
 }
 
-export function Card({ children }: { children: React.ReactNode }) {
+export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const theme = useTheme();
   return (
     <View
-      style={{
-        backgroundColor: theme.colors.surface,
-        borderRadius: 16,
-        padding: 16,
-        gap: 4,
-        shadowColor: "#000",
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      }}
+      style={[
+        {
+          backgroundColor: theme.colors.surface,
+          borderRadius: 16,
+          padding: 16,
+          gap: 4,
+          shadowColor: "#000",
+          shadowOpacity: 0.04,
+          shadowRadius: 6,
+        },
+        style,
+      ]}
     >
       {children}
     </View>

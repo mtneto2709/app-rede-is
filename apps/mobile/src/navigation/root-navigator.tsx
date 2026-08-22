@@ -15,6 +15,8 @@ import { AlertsScreen } from "@/screens/alerts-screen";
 import { HealthUnitsScreen } from "@/screens/health-units-screen";
 import { VaccinationScreen } from "@/screens/vaccination-screen";
 import { ProfileScreen } from "@/screens/profile-screen";
+import { SocialScreen } from "@/screens/social-screen";
+import { ContactScreen } from "@/screens/contact-screen";
 
 export type RootStackParamList = {
   Login: undefined;
@@ -30,6 +32,8 @@ export type MainTabParamList = {
   Vacinacao: undefined;
   Alertas: undefined;
   Unidades: undefined;
+  Social: undefined;
+  Contato: undefined;
   Perfil: undefined;
 };
 
@@ -44,6 +48,8 @@ const TAB_ICONS: Record<keyof MainTabParamList, { focused: keyof typeof Ionicons
   Vacinacao: { focused: "medical", outline: "medical-outline" },
   Alertas: { focused: "notifications", outline: "notifications-outline" },
   Unidades: { focused: "business", outline: "business-outline" },
+  Social: { focused: "share-social", outline: "share-social-outline" },
+  Contato: { focused: "call", outline: "call-outline" },
   Perfil: { focused: "person", outline: "person-outline" },
 };
 
@@ -66,12 +72,13 @@ function MainTabs() {
       <Tab.Screen name="Atendimentos" component={AttendancesScreen} options={{ title: "Atend." }} />
       <Tab.Screen name="Documentos" component={DocumentsScreen} options={{ title: "Docs" }} />
       {/*
-        Vacinação e Unidades ficam FORA da barra (mesmo padrão do web —
-        bottom-nav.tsx só tem Início/Agenda/Docs/Alertas/Perfil, o resto é
-        acessado pela grade "Serviços" da home). Continuam navegáveis por
-        navigation.navigate("Vacinacao"/"Unidades") a partir do
-        DashboardScreen — só não aparecem como ícone na barra, pra não
-        lotar ainda mais uma barra que já tem 6 itens visíveis.
+        Vacinação, Unidades, Redes Sociais e Contato ficam FORA da barra
+        (mesmo padrão do web — bottom-nav.tsx só tem
+        Início/Agenda/Docs/Alertas/Perfil, o resto é acessado pela grade
+        "Serviços"/rodapé da home). Continuam navegáveis por
+        navigation.navigate(...) a partir do DashboardScreen — só não
+        aparecem como ícone na barra, pra não lotar ainda mais uma barra
+        que já tem 6 itens visíveis.
       */}
       <Tab.Screen
         name="Vacinacao"
@@ -83,6 +90,16 @@ function MainTabs() {
         name="Unidades"
         component={HealthUnitsScreen}
         options={{ title: "Unidades", tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="Social"
+        component={SocialScreen}
+        options={{ title: "Redes Sociais", tabBarButton: () => null }}
+      />
+      <Tab.Screen
+        name="Contato"
+        component={ContactScreen}
+        options={{ title: "Contato", tabBarButton: () => null }}
       />
       <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: "Perfil" }} />
     </Tab.Navigator>
