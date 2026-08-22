@@ -206,18 +206,40 @@ export class QuestionnaireService {
     @Inject(ENV) private readonly env: Env,
   ) {}
 
-  /** Todos os cadastros (em qualquer uma das duas bases) cujo contato bate com o informado no login. */
-  private async findCandidates(contact: string): Promise<IdentityCandidateDto[]> {
+  /**
+   * Todos os cadastros (em qualquer uma das duas bases) cujo contato bate
+   * com o informado no login. Erros de conexão/consulta em cada base são
+   * logados (nunca escondidos silenciosamente) e reportados de volta em
+   * `errors`, para que `start()` possa dar um diagnóstico melhor do que
+   * "não encontramos" quando na verdade uma das bases falhou ao consultar.
+   */
+  private async findCandidates(
+    contact: string,
+  ): Promise<{ candidates: IdentityCandidateDto[]; errors: { source: SourceSystem; message: string }[] }> {
+    const errors: { source: SourceSystem; message: string }[] = [];
+
     const [fromEsus, fromIs] = await Promise.all([
-      this.esusPec.findIdentityCandidatesByContact(contact).catch(() => []),
-      this.sistemaIs.findIdentityCandidatesByContact(contact).catch(() => []),
+      this.esusPec.findIdentityCandidatesByContact(contact).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Falha ao buscar cadastro no e-SUS PEC por contato: ${message}`);
+        errors.push({ source: "esus-pec", message });
+        return [];
+      }),
+      this.sistemaIs.findIdentityCandidatesByContact(contact).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Falha ao buscar cadastro no Sistema IS por contato: ${message}`);
+        errors.push({ source: "sistema-is", message });
+        return [];
+      }),
     ]);
 
     // e-SUS primeiro — é a base priorizada quando a mesma pessoa aparecer em ambas.
-    return [
+    const candidates = [
       ...fromEsus.map((c) => ({ sourceSystem: "esus-pec" as const, sourcePatientId: c.sourcePatientId, maskedName: maskName(c.name) })),
       ...fromIs.map((c) => ({ sourceSystem: "sistema-is" as const, sourcePatientId: c.sourcePatientId, maskedName: maskName(c.name) })),
     ];
+
+    return { candidates, errors };
   }
 
   private repositoryFor(sourceSystem: SourceSystem) {
@@ -258,10 +280,18 @@ export class QuestionnaireService {
       );
     }
 
-    const candidates = await this.findCandidates(contact);
+    const { candidates, errors } = await this.findCandidates(contact);
     if (candidates.length === 0) {
+      // Em produção nunca expor detalhe de infraestrutura ao usuário final —
+      // mas em desenvolvimento isso costuma ser a diferença entre "não achei
+      // mesmo" e "uma das duas bases falhou/ainda não está mapeada", que é
+      // muito mais rápido de diagnosticar vendo aqui do que só no log.
+      const devDetail =
+        this.env.NODE_ENV !== "production" && errors.length > 0
+          ? ` [DEV] Falha ao consultar: ${errors.map((e) => `${e.source} — ${e.message}`).join("; ")}`
+          : "";
       throw new BadRequestException(
-        "Não localizamos seu cadastro nas bases de saúde. Procure o suporte do seu município.",
+        `Não localizamos seu cadastro nas bases de saúde. Procure o suporte do seu município.${devDetail}`,
       );
     }
 
@@ -290,7 +320,14 @@ export class QuestionnaireService {
     sourcePatientId: string,
     channel: AuthChannel,
   ): Promise<QuestionnaireReadyResult> {
-    const profile = await this.repositoryFor(sourceSystem).getIdentityProfile(sourcePatientId);
+    const profile = await this.repositoryFor(sourceSystem)
+      .getIdentityProfile(sourcePatientId)
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Falha ao carregar perfil de identidade (${sourceSystem}/${sourcePatientId}): ${message}`);
+        const devDetail = this.env.NODE_ENV !== "production" ? ` [DEV] ${sourceSystem}: ${message}` : "";
+        throw new BadRequestException(`Não foi possível carregar os dados do cadastro selecionado.${devDetail}`);
+      });
     if (!profile) {
       throw new BadRequestException("Não foi possível carregar os dados do cadastro selecionado.");
     }

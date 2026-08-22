@@ -58,15 +58,18 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
   /**
    * TODO(db-mapping): a tabela é `sotech.cdg_paciente`, mas ainda não
    * tenho as colunas reais (nome, telefone, e-mail). Preencher assim que
-   * o schema for confirmado — ver questão pendente no chat.
+   * o schema for confirmado — ver questão pendente no chat. Lança em vez
+   * de retornar vazio para que o chamador (QuestionnaireService) consiga
+   * distinguir "não encontrado de verdade" de "essa base ainda não está
+   * mapeada" — ver o detalhe [DEV] na mensagem de erro do questionário.
    */
   async findIdentityCandidatesByContact(_contact: string): Promise<IdentityCandidate[]> {
-    return [];
+    throw new Error("TODO(db-mapping): mapear busca de identidade por contato em sotech.cdg_paciente");
   }
 
   /** TODO(db-mapping): idem — precisa das colunas de sotech.cdg_paciente. */
   async getIdentityProfile(_sourcePatientId: string): Promise<IdentityProfile | null> {
-    return null;
+    throw new Error("TODO(db-mapping): mapear perfil de identidade em sotech.cdg_paciente");
   }
 
   async onModuleDestroy() {

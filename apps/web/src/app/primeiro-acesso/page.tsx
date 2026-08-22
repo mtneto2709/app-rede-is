@@ -40,9 +40,12 @@ export default function FirstAccessPage() {
     }
 
     fetch("/api/bff/first-access/questionnaire", { headers: { "x-first-access-token": token } })
-      .then((res) => {
-        if (!res.ok) throw new Error("Não foi possível carregar o questionário.");
-        return res.json();
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message ?? "Não foi possível carregar o questionário.");
+        }
+        return data;
       })
       .then((data) => {
         if (data.status === "candidates") {
@@ -69,8 +72,8 @@ export default function FirstAccessPage() {
         headers: { "Content-Type": "application/json", "x-first-access-token": token },
         body: JSON.stringify({ sourceSystem: candidate.sourceSystem, sourcePatientId: candidate.sourcePatientId }),
       });
-      if (!res.ok) throw new Error("Não foi possível carregar o questionário para esse cadastro.");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? "Não foi possível carregar o questionário para esse cadastro.");
       setAttemptId(data.attemptId);
       setQuestions(data.questions);
       setStep({ kind: "questions" });
@@ -95,9 +98,9 @@ export default function FirstAccessPage() {
           answers: Object.entries(answers).map(([questionId, optionId]) => ({ questionId, optionId })),
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status !== "authenticated") {
-        throw new Error("Não foi possível validar sua identidade. Procure o suporte do seu município.");
+        throw new Error(data.message ?? "Não foi possível validar sua identidade. Procure o suporte do seu município.");
       }
       sessionStorage.removeItem(FIRST_ACCESS_TOKEN_KEY);
       setAccessToken(data.accessToken);

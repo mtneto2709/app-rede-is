@@ -43,7 +43,8 @@ export function LoginForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel, contact }),
       });
-      if (!res.ok) throw new Error("Não foi possível enviar o código. Verifique o contato informado.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? "Não foi possível enviar o código. Verifique o contato informado.");
       setStep("code");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
@@ -62,8 +63,8 @@ export function LoginForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel, contact, code }),
       });
-      if (!res.ok) throw new Error("Código inválido ou expirado.");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message ?? "Código inválido ou expirado.");
       handleLoginResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro inesperado");
