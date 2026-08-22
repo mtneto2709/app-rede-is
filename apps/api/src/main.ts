@@ -31,6 +31,21 @@ async function bootstrap() {
 
   app.setGlobalPrefix("api");
 
+  // Log explícito do estado do bypass de dev no boot — evita depuração às
+  // cegas quando NODE_ENV vem de fora (ex.: plataforma de deploy define
+  // NODE_ENV=production automaticamente, mesmo com o .env local dizendo
+  // development) e a variável acaba sendo ignorada silenciosamente.
+  // eslint-disable-next-line no-console
+  console.log(
+    `[boot] NODE_ENV=${env.NODE_ENV} | AUTH_DEV_FORCE_OTP_PHONE=${
+      env.NODE_ENV !== "production" && env.AUTH_DEV_FORCE_OTP_PHONE
+        ? `ATIVO (${env.AUTH_DEV_FORCE_OTP_PHONE})`
+        : "inativo"
+    } | AUTH_DEV_ALWAYS_PASS_QUESTIONNAIRE=${
+      env.NODE_ENV !== "production" && env.AUTH_DEV_ALWAYS_PASS_QUESTIONNAIRE ? "ATIVO" : "inativo"
+    }`,
+  );
+
   await app.listen(env.API_PORT);
 }
 
