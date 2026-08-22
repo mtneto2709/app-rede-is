@@ -13,6 +13,7 @@ import { AttendancesScreen } from "@/screens/attendances-screen";
 import { DocumentsScreen } from "@/screens/documents-screen";
 import { AlertsScreen } from "@/screens/alerts-screen";
 import { HealthUnitsScreen } from "@/screens/health-units-screen";
+import { VaccinationScreen } from "@/screens/vaccination-screen";
 import { ProfileScreen } from "@/screens/profile-screen";
 
 export type RootStackParamList = {
@@ -26,6 +27,7 @@ export type MainTabParamList = {
   Agendamentos: undefined;
   Atendimentos: undefined;
   Documentos: undefined;
+  Vacinacao: undefined;
   Alertas: undefined;
   Unidades: undefined;
   Perfil: undefined;
@@ -39,6 +41,7 @@ const TAB_ICONS: Record<keyof MainTabParamList, { focused: keyof typeof Ionicons
   Agendamentos: { focused: "calendar", outline: "calendar-outline" },
   Atendimentos: { focused: "medkit", outline: "medkit-outline" },
   Documentos: { focused: "document-text", outline: "document-text-outline" },
+  Vacinacao: { focused: "medical", outline: "medical-outline" },
   Alertas: { focused: "notifications", outline: "notifications-outline" },
   Unidades: { focused: "business", outline: "business-outline" },
   Perfil: { focused: "person", outline: "person-outline" },
@@ -62,6 +65,7 @@ function MainTabs() {
       <Tab.Screen name="Agendamentos" component={AppointmentsScreen} options={{ title: "Agenda" }} />
       <Tab.Screen name="Atendimentos" component={AttendancesScreen} options={{ title: "Atend." }} />
       <Tab.Screen name="Documentos" component={DocumentsScreen} options={{ title: "Docs" }} />
+      <Tab.Screen name="Vacinacao" component={VaccinationScreen} options={{ title: "Vacinas" }} />
       <Tab.Screen name="Alertas" component={AlertsScreen} options={{ title: "Alertas" }} />
       <Tab.Screen name="Unidades" component={HealthUnitsScreen} options={{ title: "Unidades" }} />
       <Tab.Screen name="Perfil" component={ProfileScreen} options={{ title: "Perfil" }} />

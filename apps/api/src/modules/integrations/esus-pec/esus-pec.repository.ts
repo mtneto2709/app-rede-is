@@ -4,20 +4,31 @@ import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@re
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
 import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
+import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
 import type {
   IdentityCandidate,
   IdentityProfile,
   PatientSourceRepository,
 } from "../../../common/database/patient-source-repository.interface";
 
+/** Uma dose de vacina administrada — usado só por VaccinationService, não faz parte do contrato compartilhado (vacinação hoje é e-SUS PEC apenas). */
+export interface AdministeredVaccine {
+  immunobiologicName: string;
+  administeredAt: string;
+  healthUnitName: string | null;
+  professionalName: string | null;
+}
+
 /**
  * Repositório somente-leitura do e-SUS PEC.
  *
  * `public.tb_atend`/`tb_atend_prof`/`tb_prontuario` (histórico de
- * atendimentos) mapeados a partir de uma query real em produção (projeto de
- * BI de estoque/atendimento do mesmo cliente — ver
- * SistemaIsRepository/questionário). `findPatientByCpf`,
- * `findDocumentsByPatient`, `findHealthUnits` etc. continuam placeholders.
+ * atendimentos) e `public.tb_unidade_saude` (nome das unidades) mapeados a
+ * partir de uma query real em produção (projeto de BI de estoque/
+ * atendimento do mesmo cliente — ver SistemaIsRepository/questionário).
+ * `findAdministeredVaccines` é inferido, não confirmado (ver seu próprio
+ * comentário). `findPatientByCpf`, `findDocumentsByPatient` etc. continuam
+ * placeholders.
  */
 @Injectable()
 export class EsusPecRepository implements PatientSourceRepository, OnModuleDestroy {
@@ -125,9 +136,79 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     return [];
   }
 
+  /**
+   * `public.tb_unidade_saude` já é usada (confirmada) nas queries de
+   * atendimento — `co_seq_unidade_saude`/`no_unidade_saude` são reais.
+   * Endereço, telefone e especialidades NÃO confirmados: a documentação
+   * técnica oficial do e-SUS (integracao.esusaps.bridge.ufsc.tech,
+   * sisaps.saude.gov.br) está bloqueada pela rede deste ambiente — não
+   * consegui verificar essas colunas. `type` é inferido do nome da unidade
+   * (heurística por palavra-chave — ver classifyHealthUnitType), já que não
+   * há coluna de tipo confirmada.
+   */
   async findHealthUnits(): Promise<HealthUnit[]> {
-    // TODO(db-mapping): SELECT ... FROM tb_estabelecimento
-    return [];
+    const rows = await this.pool.query<{ co_seq_unidade_saude: string; no_unidade_saude: string }>(
+      `SELECT co_seq_unidade_saude::text AS co_seq_unidade_saude, no_unidade_saude
+       FROM public.tb_unidade_saude
+       ORDER BY no_unidade_saude`,
+    );
+
+    return rows.map((row) => ({
+      id: row.co_seq_unidade_saude,
+      name: row.no_unidade_saude,
+      type: classifyHealthUnitType(row.no_unidade_saude),
+      address: null,
+      phone: null,
+      specialties: [],
+      openingHours: null,
+      latitude: null,
+      longitude: null,
+      sourceSystem: "esus-pec" as const,
+    }));
+  }
+
+  /**
+   * ATENÇÃO(não confirmado): não consegui confirmar o nome real da tabela
+   * de vacinação — nem o mapeamento do Sistema IS nem a referência de BI
+   * anterior cobrem esse módulo, e a documentação técnica oficial do e-SUS
+   * está bloqueada pela rede deste ambiente. Escrito por inferência a
+   * partir do layout de envio de dados (LEDI) de vacinação do e-SUS PEC
+   * (campos imunobiologico/estrategiaVacinacao/dose/lote/fabricante — ver
+   * laboratoriobridge/esusaps-integracao no GitHub) e da convenção de nomes
+   * já confirmada em tb_atend/tb_atend_prof/tb_prontuario. Se o nome da
+   * tabela ou de alguma coluna estiver errado, essa query falha — o
+   * chamador (VaccinationService, via PatientsService) captura o erro e
+   * degrada para mostrar só o calendário vacinal, sem nenhuma dose marcada
+   * como tomada, em vez de quebrar a tela inteira.
+   */
+  async findAdministeredVaccines(patientId: string): Promise<AdministeredVaccine[]> {
+    const rows = await this.pool.query<{
+      immunobiologic_name: string;
+      administered_at: string;
+      health_unit_name: string | null;
+      professional_name: string | null;
+    }>(
+      `SELECT imuno.no_imunobiologico AS immunobiologic_name, ap.dt_inicio AS administered_at,
+              us.no_unidade_saude AS health_unit_name, prof.no_civil_profissional AS professional_name
+       FROM public.tb_vacinacao v
+       INNER JOIN public.tb_atend_prof ap ON ap.co_seq_atend_prof = v.co_atend_prof
+       INNER JOIN public.tb_atend a ON a.co_seq_atend = ap.co_atend
+       INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = a.co_prontuario
+       LEFT JOIN public.tb_imunobiologico imuno ON imuno.co_seq_imunobiologico = v.co_imunobiologico
+       LEFT JOIN public.tb_unidade_saude us ON us.co_seq_unidade_saude = a.co_unidade_saude
+       LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = ap.co_lotacao
+       LEFT JOIN public.tb_prof prof ON prof.co_seq_prof = l.co_prof
+       WHERE pront.co_cidadao = $1
+       ORDER BY ap.dt_inicio ASC`,
+      [patientId],
+    );
+
+    return rows.map((row) => ({
+      immunobiologicName: row.immunobiologic_name,
+      administeredAt: row.administered_at,
+      healthUnitName: row.health_unit_name,
+      professionalName: row.professional_name,
+    }));
   }
 
   /**

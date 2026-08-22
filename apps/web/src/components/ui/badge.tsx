@@ -1,12 +1,13 @@
 import type { HTMLAttributes } from "react";
 
-type Tone = "neutral" | "success" | "warning" | "danger";
+type Tone = "neutral" | "success" | "warning" | "danger" | "secondary";
 
 const toneClasses: Record<Tone, string> = {
   neutral: "bg-black/5 text-text-secondary",
   success: "bg-success/10 text-success",
   warning: "bg-warning/10 text-warning",
   danger: "bg-danger/10 text-danger",
+  secondary: "bg-secondary/10 text-secondary",
 };
 
 export function Badge({ tone = "neutral", className = "", ...props }: HTMLAttributes<HTMLSpanElement> & { tone?: Tone }) {

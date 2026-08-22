@@ -15,6 +15,15 @@ const TYPE_LABEL: Record<HealthUnit["type"], string> = {
   other: "Outro",
 };
 
+/** Link universal do Google Maps — abre o app instalado no celular ou o site no navegador. */
+function mapsUrl(unit: HealthUnit): string {
+  const query =
+    unit.latitude != null && unit.longitude != null
+      ? `${unit.latitude},${unit.longitude}`
+      : [unit.name, unit.address].filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
 export default function HealthUnitsPage() {
   const { data, isLoading, error } = useMeQuery<HealthUnit[]>("health-units");
 
@@ -31,9 +40,11 @@ export default function HealthUnitsPage() {
               <p className="font-medium text-sm">{unit.name}</p>
               <span className="text-xs text-text-secondary">{TYPE_LABEL[unit.type]}</span>
             </div>
-            <p className="text-xs text-text-secondary flex items-center gap-1">
-              <MapPin className="h-3 w-3" /> {unit.address}
-            </p>
+            {unit.address && (
+              <p className="text-xs text-text-secondary flex items-center gap-1">
+                <MapPin className="h-3 w-3" /> {unit.address}
+              </p>
+            )}
             {unit.phone && (
               <p className="text-xs text-text-secondary flex items-center gap-1">
                 <Phone className="h-3 w-3" /> {unit.phone}
@@ -42,6 +53,14 @@ export default function HealthUnitsPage() {
             {unit.specialties.length > 0 && (
               <p className="text-xs text-text-secondary">{unit.specialties.join(", ")}</p>
             )}
+            <a
+              href={mapsUrl(unit)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary"
+            >
+              <MapPin className="h-3 w-3" /> Abrir no mapa
+            </a>
           </Card>
         ))}
       </div>

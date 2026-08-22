@@ -1,18 +1,22 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import type { DashboardStats } from "@rede-is/shared-types";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import type { DashboardStats, VaccinationCardResponse } from "@rede-is/shared-types";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../../common/audit/audit.service";
 import { SistemaIsRepository } from "../integrations/sistema-is/sistema-is.repository";
-import { EsusPecRepository } from "../integrations/esus-pec/esus-pec.repository";
+import { EsusPecRepository, type AdministeredVaccine } from "../integrations/esus-pec/esus-pec.repository";
+import { VaccinationService } from "./vaccination.service";
 import type { PatientSourceRepository } from "../../common/database/patient-source-repository.interface";
 
 @Injectable()
 export class PatientsService {
+  private readonly logger = new Logger(PatientsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly sistemaIs: SistemaIsRepository,
     private readonly esusPec: EsusPecRepository,
+    private readonly vaccination: VaccinationService,
   ) {}
 
   private repositoryFor(sourceSystem: string): PatientSourceRepository {
@@ -97,6 +101,35 @@ export class PatientsService {
     const result = await this.repositoryFor(link.sourceSystem).findHealthUnits();
     await this.logRead(tenantId, userId, "patients.health_units.read", ip);
     return result;
+  }
+
+  /**
+   * Vacinação hoje só é mapeada no e-SUS PEC (`available: false` para
+   * quem foi vinculado pelo Sistema IS). Se a busca de doses administradas
+   * falhar (tabela ainda não confirmada — ver EsusPecRepository), degrada
+   * para devolver só o calendário (tudo como "atrasada"/"futura") em vez de
+   * quebrar a tela inteira — melhor mostrar o calendário sem histórico do
+   * que não mostrar nada.
+   */
+  async getVaccinationCard(tenantId: string, userId: string, ip?: string): Promise<VaccinationCardResponse> {
+    const link = await this.requireLink(userId);
+    if (link.sourceSystem !== "esus-pec") {
+      return { available: false, entries: [] };
+    }
+
+    const profile = await this.esusPec.getIdentityProfile(link.sourcePatientId);
+
+    let administered: AdministeredVaccine[] = [];
+    try {
+      administered = await this.esusPec.findAdministeredVaccines(link.sourcePatientId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Falha ao buscar vacinas administradas (${link.sourcePatientId}): ${message}`);
+    }
+
+    const entries = this.vaccination.buildCard(profile?.birthDate ?? null, administered);
+    await this.logRead(tenantId, userId, "patients.vaccination_card.read", ip);
+    return { available: true, entries };
   }
 }
 

@@ -35,7 +35,7 @@ const SERVICES = [
   { name: "Agendamentos", icon: Calendar, href: "/agendamentos" },
   { name: "Teleconsulta", icon: Video, href: "/agendamentos" },
   { name: "Atendimentos", icon: UserCheck, href: "/atendimentos" },
-  { name: "Vacinação", icon: BriefcaseMedical, href: "/documentos" },
+  { name: "Vacinação", icon: BriefcaseMedical, href: "/vacinacao" },
   { name: "Meus Cartões", icon: CreditCard, href: "/perfil" },
   { name: "Unidades", icon: MapPin, href: "/unidades" },
   { name: "Minha Saúde", icon: Heart, href: "/documentos" },

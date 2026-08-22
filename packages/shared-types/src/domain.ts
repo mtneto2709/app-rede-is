@@ -77,7 +77,9 @@ export const HealthUnit = z.object({
   id: z.string(),
   name: z.string(),
   type: z.enum(["ubs", "hospital", "clinic", "laboratory", "other"]),
-  address: z.string(),
+  // nullable: nem toda base tem endereço estruturado disponível — melhor
+  // omitir na tela do que inventar um texto.
+  address: z.string().nullable(),
   phone: z.string().nullable(),
   specialties: z.array(z.string()),
   openingHours: z.string().nullable(),
@@ -86,6 +88,37 @@ export const HealthUnit = z.object({
   sourceSystem: SourceSystem,
 });
 export type HealthUnit = z.infer<typeof HealthUnit>;
+
+/**
+ * Uma dose da caderneta de vacinação — cruza o calendário vacinal (PNI,
+ * fixo por idade) com o que o paciente de fato tomou. `dueDate` é o alvo
+ * calculado a partir da data de nascimento; fica `null` quando já
+ * administrada (nesse caso o que importa é `administeredAt`).
+ */
+export const VaccinationCardEntry = z.object({
+  id: z.string(),
+  immunobiologicName: z.string(),
+  doseLabel: z.string(),
+  status: z.enum(["administered", "late", "upcoming"]),
+  dueDate: z.string().nullable(),
+  administeredAt: z.string().nullable(),
+  administeredAtHealthUnit: z.string().nullable(),
+  administeredByProfessional: z.string().nullable(),
+  sourceSystem: SourceSystem,
+});
+export type VaccinationCardEntry = z.infer<typeof VaccinationCardEntry>;
+
+/**
+ * `available: false` quando a base de origem do paciente não tem
+ * mapeamento de vacinação ainda (hoje, só e-SUS PEC tem) — diferente de
+ * "disponível mas sem nenhuma dose", que é `available: true` com array
+ * vazio.
+ */
+export const VaccinationCardResponse = z.object({
+  available: z.boolean(),
+  entries: z.array(VaccinationCardEntry),
+});
+export type VaccinationCardResponse = z.infer<typeof VaccinationCardResponse>;
 
 export const Document = z.object({
   id: z.string(),
