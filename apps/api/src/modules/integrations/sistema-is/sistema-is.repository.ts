@@ -3,7 +3,11 @@ import { getSistemaIsConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
-import type { PatientSourceRepository } from "../../../common/database/patient-source-repository.interface";
+import type {
+  IdentityCandidate,
+  IdentityProfile,
+  PatientSourceRepository,
+} from "../../../common/database/patient-source-repository.interface";
 
 /**
  * Repositório somente-leitura do Sistema IS.
@@ -49,6 +53,20 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
   async findHealthUnits(): Promise<HealthUnit[]> {
     // TODO(db-mapping): SELECT ... FROM <tabela_unidades_saude>
     return [];
+  }
+
+  /**
+   * TODO(db-mapping): a tabela é `sotech.cdg_paciente`, mas ainda não
+   * tenho as colunas reais (nome, telefone, e-mail). Preencher assim que
+   * o schema for confirmado — ver questão pendente no chat.
+   */
+  async findIdentityCandidatesByContact(_contact: string): Promise<IdentityCandidate[]> {
+    return [];
+  }
+
+  /** TODO(db-mapping): idem — precisa das colunas de sotech.cdg_paciente. */
+  async getIdentityProfile(_sourcePatientId: string): Promise<IdentityProfile | null> {
+    return null;
   }
 
   async onModuleDestroy() {

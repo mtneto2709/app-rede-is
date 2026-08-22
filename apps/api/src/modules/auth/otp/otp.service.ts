@@ -48,7 +48,23 @@ export class OtpService {
       },
     });
 
-    await this.senderFor(channel).send(contact, code);
+    await this.senderFor(channel).send(this.deliveryContactFor(channel, contact), code);
+  }
+
+  /**
+   * Em desenvolvimento, redireciona a entrega de SMS/WhatsApp para um
+   * número fixo de teste (AUTH_DEV_FORCE_OTP_PHONE) — útil para testar o
+   * fluxo sem depender do número real de cada paciente de teste. O
+   * registro no banco (e a busca de identidade) continuam usando o
+   * contato real informado; só o destino da mensagem muda. Nunca ativa em
+   * produção, mesmo que a variável esteja setada por engano.
+   */
+  private deliveryContactFor(channel: AuthChannel, contact: string): string {
+    const devPhone = this.env.AUTH_DEV_FORCE_OTP_PHONE;
+    if (devPhone && this.env.NODE_ENV !== "production" && (channel === "sms" || channel === "whatsapp")) {
+      return devPhone;
+    }
+    return contact;
   }
 
   /**

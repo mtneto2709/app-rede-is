@@ -1,5 +1,5 @@
 import * as SecureStore from "expo-secure-store";
-import type { GetQuestionnaireResult } from "@rede-is/shared-types";
+import type { StartQuestionnaireResult, SelectCandidateInput } from "@rede-is/shared-types";
 import { apiBaseUrl } from "@/theme/theme-provider";
 
 const REFRESH_TOKEN_KEY = "rede_is_refresh_token";
@@ -76,7 +76,15 @@ export const authApi = {
     ),
 
   getQuestionnaire: (tenantSlug: string, firstAccessToken: string) =>
-    request<GetQuestionnaireResult>("/auth/first-access/questionnaire", { tenantSlug, firstAccessToken }),
+    request<StartQuestionnaireResult>("/auth/first-access/questionnaire", { tenantSlug, firstAccessToken }),
+
+  selectCandidate: (tenantSlug: string, firstAccessToken: string, input: SelectCandidateInput) =>
+    request<Extract<StartQuestionnaireResult, { status: "ready" }>>("/auth/first-access/candidate", {
+      method: "POST",
+      tenantSlug,
+      firstAccessToken,
+      body: input,
+    }),
 
   submitQuestionnaire: (
     tenantSlug: string,

@@ -76,6 +76,11 @@ EMAIL_FROM=
 OTP_LENGTH=6
 OTP_TTL_MINUTES=5
 OTP_MAX_ATTEMPTS=5
+
+# Bypasses de desenvolvimento — nunca funcionam se NODE_ENV=production,
+# mesmo que estejam setados por engano.
+AUTH_DEV_FORCE_OTP_PHONE=    # ex: 85999360010 — redireciona todo SMS/WhatsApp pra esse número, ignorando o contato real digitado
+AUTH_DEV_ALWAYS_PASS_QUESTIONNAIRE=false  # true = aprova o questionário de 1o acesso mesmo com respostas erradas
 ```
 
 ## 5. Aplicação / infraestrutura

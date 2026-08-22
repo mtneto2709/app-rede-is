@@ -1,36 +1,56 @@
 import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { QuestionnaireQuestion } from "@rede-is/shared-types";
+import type { QuestionnaireQuestion, IdentityCandidate } from "@rede-is/shared-types";
 import { useTheme } from "@/theme/theme-provider";
 import { useAuth } from "@/lib/auth-context";
 import { authApi } from "@/lib/api-client";
 import type { RootStackParamList } from "@/navigation/root-navigator";
 
 type Props = NativeStackScreenProps<RootStackParamList, "FirstAccess">;
+type Step = { kind: "loading" } | { kind: "candidates"; candidates: IdentityCandidate[] } | { kind: "questions" };
 
 export function FirstAccessScreen({ route }: Props) {
   const { firstAccessToken } = route.params;
   const theme = useTheme();
   const { setAccessToken } = useAuth();
 
+  const [step, setStep] = useState<Step>({ kind: "loading" });
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<QuestionnaireQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     authApi
       .getQuestionnaire(theme.slug, firstAccessToken)
       .then((data) => {
-        setAttemptId(data.attemptId);
-        setQuestions(data.questions);
+        if (data.status === "candidates") {
+          setStep({ kind: "candidates", candidates: data.candidates });
+        } else {
+          setAttemptId(data.attemptId);
+          setQuestions(data.questions);
+          setStep({ kind: "questions" });
+        }
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setIsLoading(false));
+      .catch((err) => setError(err.message));
   }, [theme.slug, firstAccessToken]);
+
+  async function handleSelectCandidate(candidate: IdentityCandidate) {
+    setError(null);
+    try {
+      const data = await authApi.selectCandidate(theme.slug, firstAccessToken, {
+        sourceSystem: candidate.sourceSystem,
+        sourcePatientId: candidate.sourcePatientId,
+      });
+      setAttemptId(data.attemptId);
+      setQuestions(data.questions);
+      setStep({ kind: "questions" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro inesperado");
+    }
+  }
 
   async function handleSubmit() {
     if (!attemptId) return;
@@ -57,11 +77,32 @@ export function FirstAccessScreen({ route }: Props) {
 
   const styles = createStyles(theme);
 
-  if (isLoading) {
+  if (step.kind === "loading" && !error) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={theme.colors.primary} />
       </View>
+    );
+  }
+
+  if (step.kind === "candidates") {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={{ padding: 24, gap: 16 }}>
+        <Text style={styles.title}>Qual cadastro é o seu?</Text>
+        <Text style={styles.subtitle}>
+          Encontramos mais de um cadastro com esse contato. Toque no seu nome para continuar.
+        </Text>
+        {step.candidates.map((c) => (
+          <Pressable
+            key={`${c.sourceSystem}:${c.sourcePatientId}`}
+            style={styles.card}
+            onPress={() => handleSelectCandidate(c)}
+          >
+            <Text style={styles.prompt}>{c.maskedName}</Text>
+          </Pressable>
+        ))}
+        {error && <Text style={styles.error}>{error}</Text>}
+      </ScrollView>
     );
   }
 

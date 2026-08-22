@@ -5,11 +5,12 @@ import { AuditService } from "../../common/audit/audit.service";
 import { OtpService } from "./otp/otp.service";
 import { SocialLoginService } from "./social-login.service";
 import { TokenService } from "./token.service";
-import { QuestionnaireService } from "./first-access/questionnaire.service";
+import { QuestionnaireService, type StartQuestionnaireResult } from "./first-access/questionnaire.service";
 import type { RequestOtpDto } from "./dto/request-otp.dto";
 import type { VerifyOtpDto } from "./dto/verify-otp.dto";
 import type { SocialLoginDto } from "./dto/social-login.dto";
 import type { SubmitQuestionnaireDto } from "./dto/submit-questionnaire.dto";
+import type { SelectCandidateDto } from "./dto/select-candidate.dto";
 
 @Injectable()
 export class AuthService {
@@ -33,7 +34,13 @@ export class AuthService {
     });
   }
 
-  private async issueLoginResult(userId: string, tenantId: string, contact: string, ip?: string): Promise<LoginResult> {
+  private async issueLoginResult(
+    userId: string,
+    tenantId: string,
+    contact: string,
+    channel: "sms" | "whatsapp" | "email",
+    ip?: string,
+  ): Promise<LoginResult> {
     const user = await this.prisma.platformUser.findUniqueOrThrow({ where: { id: userId } });
 
     if (user.status === "BLOCKED") {
@@ -42,7 +49,10 @@ export class AuthService {
 
     if (user.status === "PENDING_FIRST_ACCESS") {
       await this.audit.record({ tenantId, userId, action: "auth.first_access.required", ipAddress: ip });
-      return { status: "first_access_required", firstAccessToken: await this.tokens.issueFirstAccessToken({ userId, tenantId }) };
+      return {
+        status: "first_access_required",
+        firstAccessToken: await this.tokens.issueFirstAccessToken({ userId, tenantId, channel }),
+      };
     }
 
     await this.audit.record({ tenantId, userId, action: "auth.login.success", ipAddress: ip });
@@ -63,7 +73,7 @@ export class AuthService {
       // usuário em requestOtp), mas nunca autentica sem userId resolvido.
       throw new UnauthorizedException("Código inválido ou expirado");
     }
-    return this.issueLoginResult(userId, tenantId, dto.contact, ip);
+    return this.issueLoginResult(userId, tenantId, dto.contact, dto.channel, ip);
   }
 
   async socialLogin(tenantId: string, dto: SocialLoginDto, ip?: string): Promise<LoginResult> {
@@ -75,7 +85,7 @@ export class AuthService {
     });
 
     if (existingIdentity) {
-      return this.issueLoginResult(existingIdentity.userId, tenantId, identity.email ?? "", ip);
+      return this.issueLoginResult(existingIdentity.userId, tenantId, identity.email ?? "", "email", ip);
     }
 
     if (!identity.email) {
@@ -87,20 +97,25 @@ export class AuthService {
       data: { userId: user.id, provider: dto.provider.toUpperCase() as never, providerUserId: identity.providerUserId },
     });
 
-    return this.issueLoginResult(user.id, tenantId, identity.email, ip);
+    return this.issueLoginResult(user.id, tenantId, identity.email, "email", ip);
   }
 
-  async getQuestionnaire(firstAccessToken: string) {
+  async getQuestionnaire(firstAccessToken: string): Promise<StartQuestionnaireResult> {
     const payload = this.tokens.verifyFirstAccessToken(firstAccessToken);
     const user = await this.prisma.platformUser.findUniqueOrThrow({ where: { id: payload.sub } });
     const contact = user.email ?? user.phone;
     if (!contact) throw new UnauthorizedException("Usuário sem contato associado");
-    return this.questionnaire.createAttempt(payload.sub, payload.tenantId, contact);
+    return this.questionnaire.start(payload.sub, payload.tenantId, contact, payload.channel);
+  }
+
+  async selectQuestionnaireCandidate(firstAccessToken: string, dto: SelectCandidateDto) {
+    const payload = this.tokens.verifyFirstAccessToken(firstAccessToken);
+    return this.questionnaire.selectCandidate(payload.sub, dto.sourceSystem, dto.sourcePatientId, payload.channel);
   }
 
   async submitQuestionnaire(firstAccessToken: string, dto: SubmitQuestionnaireDto, ip?: string): Promise<LoginResult> {
     const payload = this.tokens.verifyFirstAccessToken(firstAccessToken);
-    const { passed } = await this.questionnaire.submit(payload.sub, dto);
+    const { passed } = await this.questionnaire.submit(payload.sub, dto.attemptId, dto.answers);
 
     if (!passed) {
       await this.audit.record({ tenantId: payload.tenantId, userId: payload.sub, action: "auth.first_access.failed", ipAddress: ip });

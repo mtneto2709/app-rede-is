@@ -54,6 +54,41 @@ export const QuestionnaireQuestion = z.object({
 });
 export type QuestionnaireQuestion = z.infer<typeof QuestionnaireQuestion>;
 
+export const SourceSystemId = z.enum(["sistema-is", "esus-pec"]);
+export type SourceSystemId = z.infer<typeof SourceSystemId>;
+
+export const IdentityCandidate = z.object({
+  sourceSystem: SourceSystemId,
+  sourcePatientId: z.string(),
+  maskedName: z.string(),
+});
+export type IdentityCandidate = z.infer<typeof IdentityCandidate>;
+
+export const SelectCandidateInput = z.object({
+  sourceSystem: SourceSystemId,
+  sourcePatientId: z.string(),
+});
+export type SelectCandidateInput = z.infer<typeof SelectCandidateInput>;
+
+/**
+ * Resposta de GET /auth/first-access/questionnaire. Quando o contato do
+ * login bate com mais de um cadastro, vem "candidates" primeiro — o
+ * cliente chama POST /auth/first-access/candidate com a escolha e recebe
+ * de volta um "ready" com o questionário de fato.
+ */
+export const StartQuestionnaireResult = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("candidates"),
+    candidates: z.array(IdentityCandidate),
+  }),
+  z.object({
+    status: z.literal("ready"),
+    attemptId: z.string(),
+    questions: z.array(QuestionnaireQuestion),
+  }),
+]);
+export type StartQuestionnaireResult = z.infer<typeof StartQuestionnaireResult>;
+
 export const GetQuestionnaireResult = z.object({
   attemptId: z.string(),
   questions: z.array(QuestionnaireQuestion),

@@ -78,6 +78,13 @@ export const envSchema = z
     OTP_TTL_MINUTES: z.coerce.number().int().positive().default(5),
     OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
 
+    // Bypasses de desenvolvimento — nunca ativos em produção (guardados
+    // também por checagem de NODE_ENV em código, não só aqui). Servem para
+    // testar o fluxo de auth sem depender de SMS/WhatsApp real ou de
+    // respostas corretas no questionário.
+    AUTH_DEV_FORCE_OTP_PHONE: z.string().optional(),
+    AUTH_DEV_ALWAYS_PASS_QUESTIONNAIRE: boolFromString.default("false"),
+
     SENTRY_DSN: z.string().optional(),
   });
 

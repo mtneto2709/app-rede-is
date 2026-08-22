@@ -5,6 +5,7 @@ import { RequestOtpDto } from "./dto/request-otp.dto";
 import { VerifyOtpDto } from "./dto/verify-otp.dto";
 import { SocialLoginDto } from "./dto/social-login.dto";
 import { SubmitQuestionnaireDto } from "./dto/submit-questionnaire.dto";
+import { SelectCandidateDto } from "./dto/select-candidate.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { CurrentUser, type CurrentUserPayload } from "../../common/decorators/current-user.decorator";
@@ -39,6 +40,13 @@ export class AuthController {
   @Get("first-access/questionnaire")
   getQuestionnaire(@Headers("x-first-access-token") token: string) {
     return this.auth.getQuestionnaire(token);
+  }
+
+  /** Só é chamado quando /first-access/questionnaire retornou status "candidates". */
+  @Throttle(AUTH_THROTTLE)
+  @Post("first-access/candidate")
+  selectCandidate(@Headers("x-first-access-token") token: string, @Body() dto: SelectCandidateDto) {
+    return this.auth.selectQuestionnaireCandidate(token, dto);
   }
 
   @Throttle(AUTH_THROTTLE)

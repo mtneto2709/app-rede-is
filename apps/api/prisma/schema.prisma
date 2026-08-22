@@ -36,7 +36,6 @@ model Tenant {
   createdAt DateTime @default(now())
 
   users               PlatformUser[]
-  questionnaireBank   QuestionnaireQuestion[]
   auditLogEntries     AuditLogEntry[]
 }
 
@@ -100,17 +99,6 @@ model OtpCode {
   createdAt  DateTime    @default(now())
 
   @@index([contact, channel])
-}
-
-model QuestionnaireQuestion {
-  id       String   @id @default(cuid())
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  tenantId String
-  prompt   String
-  // ex.: "mother_name" | "reference_health_unit" | "birth_city" — usado para
-  // buscar a resposta correta a partir dos dados do Sistema IS/e-SUS PEC.
-  answerSourceField String
-  isActive Boolean  @default(true)
 }
 
 model QuestionnaireAttempt {

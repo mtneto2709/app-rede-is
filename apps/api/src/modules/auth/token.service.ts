@@ -52,8 +52,13 @@ export class TokenService {
     return { accessToken, refreshToken };
   }
 
-  async issueFirstAccessToken(params: { userId: string; tenantId: string }) {
-    const payload: FirstAccessTokenPayload = { sub: params.userId, tenantId: params.tenantId, type: "first_access" };
+  async issueFirstAccessToken(params: { userId: string; tenantId: string; channel: "sms" | "whatsapp" | "email" }) {
+    const payload: FirstAccessTokenPayload = {
+      sub: params.userId,
+      tenantId: params.tenantId,
+      type: "first_access",
+      channel: params.channel,
+    };
     return this.jwt.sign(payload, { secret: this.env.JWT_ACCESS_SECRET, expiresIn: "15m" });
   }
 
