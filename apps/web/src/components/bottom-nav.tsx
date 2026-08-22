@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Calendar, FileText, Bell, User } from "lucide-react";
+import type { ReactElement } from "react";
 
 const ITEMS = [
   { href: "/", label: "Início", icon: Home },
@@ -12,7 +13,7 @@ const ITEMS = [
   { href: "/perfil", label: "Perfil", icon: User },
 ];
 
-export function BottomNav() {
+export function BottomNav(): ReactElement {
   const pathname = usePathname();
 
   return (

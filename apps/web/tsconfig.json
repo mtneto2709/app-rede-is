@@ -12,7 +12,16 @@
     "allowJs": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // Fixa a resolução de "react"/"react-dom" para a cópia local deste
+      // app. Sem isso, arquivos .d.ts internos do Next (styled-jsx,
+      // next-devtools) importam "react" sem essa dependência estar
+      // realmente pinada, e a resolução do TypeScript cai no armazenamento
+      // compartilhado do pnpm — que agora também tem o @types/react 19.x
+      // do apps/mobile (Expo SDK 54) — misturando os dois majors no mesmo
+      // namespace global JSX e quebrando a inferência de tipo (TS2742).
+      "react": ["./node_modules/@types/react"],
+      "react-dom": ["./node_modules/@types/react-dom"]
     },
     "plugins": [{ "name": "next" }]
   },

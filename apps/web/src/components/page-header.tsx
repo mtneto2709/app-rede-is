@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import type { ReactElement } from "react";
 
-export function PageHeader({ title }: { title: string }) {
+export function PageHeader({ title }: { title: string }): ReactElement {
   const router = useRouter();
   return (
     <header className="flex items-center gap-3 px-6 py-5 sticky top-0 bg-app z-10">
