@@ -32,18 +32,33 @@ export type StartQuestionnaireResult =
   | ({ status: "ready" } & QuestionnaireReadyResult);
 
 // Distratores sintéticos — não usam dados de outros pacientes para evitar
-// qualquer vazamento de PII de terceiros nas opções erradas.
-const NAME_DISTRACTORS = [
+// qualquer vazamento de PII de terceiros nas opções erradas. Nomes
+// separados por gênero: a pergunta "nome do meio da mãe" só pode ter
+// distratores femininos, e "primeiro nome do pai" só masculinos — misturar
+// os dois entrega a resposta de graça (sobraria só uma opção do gênero certo).
+const FEMALE_NAME_DISTRACTORS = [
   "Maria",
-  "José",
   "Ana",
-  "João",
   "Francisca",
-  "Antônio",
   "Raimunda",
-  "Francisco",
   "Marta",
+  "Antônia",
+  "Josefa",
+  "Conceição",
+  "Aparecida",
+  "Fátima",
+];
+const MALE_NAME_DISTRACTORS = [
+  "José",
+  "João",
+  "Antônio",
+  "Francisco",
   "Pedro",
+  "Manoel",
+  "Raimundo",
+  "Sebastião",
+  "Carlos",
+  "Paulo",
 ];
 const CITY_DISTRACTORS = ["Fortaleza", "Sobral", "Juazeiro do Norte", "Maracanaú", "Caucaia", "Quixadá"];
 const STREET_DISTRACTORS = ["Rua das Flores", "Rua da Paz", "Avenida Brasil", "Rua São José", "Travessa Central"];
@@ -101,13 +116,13 @@ const FIELD_OPTIONS: FieldOption[] = [
     key: "motherMiddleName",
     prompt: "Qual é o nome do meio da sua mãe?",
     buildCorrect: (p) => (p.motherName ? middleNameOf(p.motherName) : null),
-    buildDistractors: (correct) => pickRandom(NAME_DISTRACTORS, 4, [correct]),
+    buildDistractors: (correct) => pickRandom(FEMALE_NAME_DISTRACTORS, 4, [correct]),
   },
   {
     key: "fatherFirstName",
     prompt: "Qual é o primeiro nome do seu pai?",
     buildCorrect: (p) => (p.fatherName ? firstNameOf(p.fatherName) : null),
-    buildDistractors: (correct) => pickRandom(NAME_DISTRACTORS, 4, [correct]),
+    buildDistractors: (correct) => pickRandom(MALE_NAME_DISTRACTORS, 4, [correct]),
   },
   {
     key: "age",
