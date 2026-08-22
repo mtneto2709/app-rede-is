@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import type { VaccinationCardEntry, VaccinationCardResponse } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog } from "@/components/ui/dialog";
 
 const STATUS_LABEL: Record<VaccinationCardEntry["status"], string> = {
   administered: "Tomada",
@@ -20,9 +22,9 @@ const STATUS_TONE: Record<VaccinationCardEntry["status"], "success" | "warning" 
 };
 
 const STATUS_BORDER: Record<VaccinationCardEntry["status"], string> = {
-  administered: "border-l-success",
-  late: "border-l-warning",
-  upcoming: "border-l-secondary",
+  administered: "border-t-success",
+  late: "border-t-warning",
+  upcoming: "border-t-secondary",
 };
 
 function formatDate(iso: string | null): string | null {
@@ -42,6 +44,7 @@ function groupByImmunobiologic(entries: VaccinationCardEntry[]): [string, Vaccin
 
 export default function VaccinationPage() {
   const { data, isLoading, error } = useMeQuery<VaccinationCardResponse>("vaccination-card");
+  const [selected, setSelected] = useState<VaccinationCardEntry | null>(null);
 
   return (
     <div>
@@ -64,28 +67,43 @@ export default function VaccinationPage() {
           groupByImmunobiologic(data.entries).map(([immunoName, doses]) => (
             <section key={immunoName} className="space-y-2">
               <h2 className="text-sm font-bold">{immunoName}</h2>
-              <div className="space-y-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {doses.map((dose) => (
-                  <Card key={dose.id} className={`p-4 border-l-4 ${STATUS_BORDER[dose.status]}`}>
-                    <div className="flex justify-between items-start gap-2">
-                      <p className="text-sm font-medium">{dose.doseLabel}</p>
-                      <Badge tone={STATUS_TONE[dose.status]}>{STATUS_LABEL[dose.status]}</Badge>
-                    </div>
-                    {dose.status === "administered" ? (
-                      <div className="text-xs text-text-secondary mt-1 space-y-0.5">
-                        <p>Aplicada em {formatDate(dose.administeredAt)}</p>
-                        {dose.administeredAtHealthUnit && <p>{dose.administeredAtHealthUnit}</p>}
-                        {dose.administeredByProfessional && <p>{dose.administeredByProfessional}</p>}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-text-secondary mt-1">Prevista para {formatDate(dose.dueDate)}</p>
-                    )}
-                  </Card>
+                  <button key={dose.id} onClick={() => setSelected(dose)} className="text-left">
+                    <Card className={`p-3 border-t-4 ${STATUS_BORDER[dose.status]} h-full`}>
+                      <p className="text-xs font-semibold leading-tight">{dose.doseLabel}</p>
+                      <p className="text-[11px] text-text-secondary mt-1 leading-tight">
+                        {dose.status === "administered" ? formatDate(dose.administeredAt) : formatDate(dose.dueDate)}
+                      </p>
+                    </Card>
+                  </button>
                 ))}
               </div>
             </section>
           ))}
       </div>
+
+      <Dialog open={!!selected} onClose={() => setSelected(null)} title={selected?.immunobiologicName ?? ""}>
+        {selected && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">{selected.doseLabel}</p>
+              <Badge tone={STATUS_TONE[selected.status]}>{STATUS_LABEL[selected.status]}</Badge>
+            </div>
+            <div className="text-sm text-text-secondary space-y-1">
+              {selected.status === "administered" ? (
+                <>
+                  <p>Aplicada em {formatDate(selected.administeredAt)}</p>
+                  {selected.administeredAtHealthUnit && <p>Local: {selected.administeredAtHealthUnit}</p>}
+                  {selected.administeredByProfessional && <p>Profissional: {selected.administeredByProfessional}</p>}
+                </>
+              ) : (
+                <p>Prevista para {formatDate(selected.dueDate)}</p>
+              )}
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }
