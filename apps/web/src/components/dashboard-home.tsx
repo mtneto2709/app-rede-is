@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 interface Banner {
   title: string;
   description: string;
-  imageUrl: string | null;
+  imageUrl?: string;
 }
 
 const QUICK_ACCESS = [

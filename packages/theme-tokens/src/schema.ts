@@ -77,7 +77,12 @@ export const TenantTheme = z.object({
       z.object({
         title: z.string(),
         description: z.string(),
-        imageUrl: z.string().url().nullable(),
+        // `.optional()` (chave ausente), não `.nullable()`: o app mobile
+        // reidrata esse tema a partir de `Constants.expoConfig.extra` (o
+        // manifesto do Expo Go passa pela ponte nativa), que não preserva
+        // `null` de forma confiável — ele chega como `{}` do outro lado e
+        // quebra o parse do zod. Chave ausente sobrevive normalmente.
+        imageUrl: z.string().url().optional(),
         order: z.number().default(0),
       }),
     )
