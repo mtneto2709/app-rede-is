@@ -58,42 +58,50 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
   }
 
   /**
-   * ATENÇÃO(verificar colunas): tabela e colunas de nome/CPF/CNS/nascimento
-   * confirmadas a partir de queries reais em produção (projeto de BI de
-   * estoque/atendimento do mesmo cliente, que já consulta
-   * `sotech.cdg_paciente` extensivamente). O que NÃO está confirmado ainda
-   * é telefone/e-mail: esse BI nunca precisou de contato do paciente
-   * (só estoque e indicadores agregados), então essas colunas não aparecem
-   * em nenhuma query existente. Falta o nome real da(s) coluna(s) de
-   * telefone/celular/e-mail em `sotech.cdg_paciente` (ou confirmar que o
-   * Sistema IS não guarda contato do paciente, e a busca por contato
-   * dependeria só do e-SUS PEC para esse caso).
+   * ATENÇÃO(verificar colunas): confirmado contra o catálogo completo de
+   * `sotech.cdg_paciente` (information_schema.columns, 74 colunas) — não
+   * existe NENHUMA coluna de telefone/celular/e-mail nessa tabela. O
+   * Sistema IS parece genuinamente não guardar contato do paciente (é um
+   * sistema de retaguarda hospitalar/farmácia, não voltado a autoatendimento
+   * do cidadão). Se não houver uma tabela separada de contato ligada por
+   * `pkpaciente`, o Sistema IS nunca vai conseguir localizar um candidato
+   * pelo telefone/e-mail do login — só o e-SUS PEC serve pra esse primeiro
+   * passo, e o Sistema IS entra apenas depois, via getIdentityProfile, para
+   * complementar/validar dados de quem já foi achado no e-SUS.
    */
   async findIdentityCandidatesByContact(_contact: string): Promise<IdentityCandidate[]> {
     throw new Error(
-      "TODO(db-mapping): coluna(s) de telefone/e-mail em sotech.cdg_paciente ainda não confirmadas",
+      "TODO(db-mapping): sotech.cdg_paciente não tem coluna de telefone/e-mail — confirmar se existe tabela de contato separada",
     );
   }
 
   /**
-   * ATENÇÃO(verificar colunas): confirmado contra queries reais em produção
-   * — `sotech.cdg_paciente` (pkpaciente, paciente, cpf, cns, datanascimento,
-   * fkbairro, fksexo) e `sotech.tbn_bairro` (pkbairro, bairro) para o bairro
-   * de residência. motherName/fatherName/birthCity/streets/mobilePhones/
-   * emails continuam null/vazios — nenhuma query do BI de referência toca
-   * nesses campos (só estoque/indicadores agregados, não cadastro completo).
+   * Confirmado contra o catálogo completo de `sotech.cdg_paciente`
+   * (information_schema.columns): `mae`/`pai` (nome completo, texto livre),
+   * `endereco` (rua/logradouro, texto livre — `numero`/`complemento`/`cep`
+   * não são necessários para a pergunta do questionário) e `ativo`.
+   * `fknaturalidade` — ATENÇÃO(inferido): assumido como FK para
+   * `sotech.tbn_municipio.pkmunicipio`, pela mesma convenção confirmada de
+   * `fkcidade` (ver atend_is.sql: `join tbn_municipio m on m.pkmunicipio =
+   * p.fkcidade`) — não testado diretamente contra o banco real.
    */
   async getIdentityProfile(sourcePatientId: string): Promise<IdentityProfile | null> {
     const rows = await this.pool.query<{
       pkpaciente: string;
       paciente: string;
+      mae: string | null;
+      pai: string | null;
       cpf: string | null;
       datanascimento: string | null;
+      endereco: string | null;
       bairro: string | null;
+      naturalidade: string | null;
     }>(
-      `SELECT p.pkpaciente, p.paciente, p.cpf, p.datanascimento, bai.bairro
+      `SELECT p.pkpaciente, p.paciente, p.mae, p.pai, p.cpf, p.datanascimento, p.endereco,
+              bai.bairro, nat.municipio AS naturalidade
        FROM sotech.cdg_paciente p
        LEFT JOIN sotech.tbn_bairro bai ON bai.pkbairro = p.fkbairro
+       LEFT JOIN sotech.tbn_municipio nat ON nat.pkmunicipio = p.fknaturalidade
        WHERE p.pkpaciente = $1`,
       [sourcePatientId],
     );
@@ -104,12 +112,12 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
     return {
       sourcePatientId: row.pkpaciente,
       name: row.paciente,
-      motherName: null,
-      fatherName: null,
+      motherName: row.mae,
+      fatherName: row.pai,
       birthDate: row.datanascimento,
-      birthCity: null,
+      birthCity: row.naturalidade,
       cpf: row.cpf,
-      streets: [],
+      streets: row.endereco ? [row.endereco] : [],
       neighborhoods: row.bairro ? [row.bairro] : [],
       mobilePhones: [],
       emails: [],
