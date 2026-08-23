@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { getEsusPecConnectionConfig, type Env } from "@rede-is/config";
-import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
+import type { Appointment, Attendance, Document, HealthCondition, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
 import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
@@ -401,25 +401,109 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * TODO(db-mapping): confirmei, pelo layout CDS/RAS exportado pro servidor
-   * nacional (thrift oficial de `laboratoriobridge/esusaps-integracao` no
-   * GitHub, ficha `cadastro_individual`), que o e-SUS PEC CAPTURA
-   * comorbidades estruturadas no Cadastro Individual — campos como
-   * `statusTemDiabetes`, `statusTemHipertensaoArterial`,
-   * `statusTemDoencaRespiratoria`, `statusTemTeveDoencasRins`,
-   * `statusTeveDoencaCardiaca` e texto livre em `descricaoOutraCondicao1/2/3`.
-   * Isso é forte indício de que a base operacional tem uma tabela
-   * equivalente (provavelmente ligada a `tb_cidadao` ou a um cadastro
-   * domiciliar/familiar), mas não consegui confirmar o nome real da
-   * tabela/colunas — esses nomes são do formato de EXPORTAÇÃO (CDS), não do
-   * schema interno do Postgres. Medicamento de uso contínuo e resultado de
-   * exame eu não confirmei nem a existência conceitual ainda.
-   * Preciso de um information_schema.columns filtrando por
-   * "condicao"/"problema"/"medicamento"/"exame"/"resultado" pra mapear de
-   * verdade — mesmo padrão usado pra vacinação.
+   * ATENÇÃO(schema repassado pelo cliente, não verificado contra um banco
+   * real): as duas queries abaixo usam nomes de tabela/coluna que o cliente
+   * levantou (não um `information_schema.columns` de uma instalação real —
+   * ver a diferença de confiança em relação a `findVaccinationCalendar`,
+   * que foi confirmado assim). São plausíveis (`tb_cds_cad_individual` é um
+   * nome real e conhecido de tabela de staging CDS do e-SUS PEC, e bate com
+   * os campos que eu mesmo já tinha confirmado existir conceitualmente via
+   * o thrift oficial de exportação — ver comentário antigo removido daqui),
+   * mas cada uma roda isolada com try/catch: se um nome estiver errado,
+   * aquela fonte simplesmente não contribui nada, sem derrubar a tela
+   * inteira. Medicamento de uso contínuo e resultado de exame continuam
+   * sem mapeamento (o cliente só passou o schema de comorbidades até agora).
    */
-  async getHealthSummary(_sourcePatientId: string): Promise<HealthSummaryResult> {
-    return { available: false, conditions: [], medications: [], exams: [] };
+  async getHealthSummary(sourcePatientId: string): Promise<HealthSummaryResult> {
+    const [selfReported, diagnosed] = await Promise.all([
+      this.getSelfReportedConditions(sourcePatientId),
+      this.getDiagnosedConditions(sourcePatientId),
+    ]);
+
+    if (selfReported === null && diagnosed === null) {
+      return { available: false, conditions: [], medications: [], exams: [] };
+    }
+
+    const seen = new Set<string>();
+    const conditions = [...(selfReported ?? []), ...(diagnosed ?? [])].filter((c) => {
+      const key = c.label.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return { available: true, conditions, medications: [], exams: [] };
+  }
+
+  /**
+   * Condições auto-relatadas no Cadastro Individual (flags booleanas) —
+   * schema repassado pelo cliente, ver ATENÇÃO em `getHealthSummary`.
+   * Pega o cadastro mais recente do cidadão (pode haver mais de um ao
+   * longo do tempo, ex. recadastramento após mudança de endereço).
+   */
+  private async getSelfReportedConditions(sourcePatientId: string): Promise<HealthCondition[] | null> {
+    try {
+      const rows = await this.pool.query<{
+        st_hipertensao_arterial: boolean | null;
+        st_diabetes: boolean | null;
+        st_doenca_cardiaca: boolean | null;
+        st_problema_rins: boolean | null;
+        st_fumante: boolean | null;
+        st_uso_alcool: boolean | null;
+      }>(
+        `SELECT st_hipertensao_arterial, st_diabetes, st_doenca_cardiaca, st_problema_rins, st_fumante, st_uso_alcool
+         FROM public.tb_cds_cad_individual
+         WHERE co_cidadao = $1
+         ORDER BY dt_cadastro DESC NULLS LAST
+         LIMIT 1`,
+        [sourcePatientId],
+      );
+
+      const row = rows[0];
+      if (!row) return [];
+
+      const flags: [boolean | null, string][] = [
+        [row.st_hipertensao_arterial, "Hipertensão arterial"],
+        [row.st_diabetes, "Diabetes"],
+        [row.st_doenca_cardiaca, "Doença cardíaca"],
+        [row.st_problema_rins, "Problema nos rins"],
+        [row.st_fumante, "Fumante"],
+        [row.st_uso_alcool, "Uso de álcool"],
+      ];
+      return flags
+        .filter(([value]) => value === true)
+        .map(([, label]) => ({ id: `self-reported:${label}`, label }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar condições auto-relatadas (tb_cds_cad_individual) de ${sourcePatientId}: ${message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Problemas/condições diagnosticados em atendimento, codificados em
+   * CID-10 — schema repassado pelo cliente, ver ATENÇÃO em `getHealthSummary`.
+   */
+  private async getDiagnosedConditions(sourcePatientId: string): Promise<HealthCondition[] | null> {
+    try {
+      const rows = await this.pool.query<{ co_seq_problema_condicao: string; no_cid10: string | null }>(
+        `SELECT DISTINCT pc.co_seq_problema_condicao::text AS co_seq_problema_condicao, cid.no_cid10
+         FROM public.tb_prontuario p
+         INNER JOIN public.tb_antecedente ant ON ant.co_prontuario = p.co_seq_prontuario
+         INNER JOIN public.tb_problema_condicao pc ON pc.co_seq_problema_condicao = ant.co_problema_condicao
+         LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = pc.co_cid10
+         WHERE p.co_cidadao = $1`,
+        [sourcePatientId],
+      );
+
+      return rows
+        .filter((row) => row.no_cid10)
+        .map((row) => ({ id: `diagnosed:${row.co_seq_problema_condicao}`, label: row.no_cid10 as string }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar condições diagnosticadas (tb_antecedente/tb_problema_condicao) de ${sourcePatientId}: ${message}`);
+      return null;
+    }
   }
 
   async onModuleDestroy() {
