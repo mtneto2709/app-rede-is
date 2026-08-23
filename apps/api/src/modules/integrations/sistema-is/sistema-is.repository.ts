@@ -44,9 +44,13 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
   /**
    * ATENÇÃO(sem dado de agenda futura): mesma observação do
    * EsusPecRepository — não há, na referência disponível, tabela de
-   * agendamento futuro do Sistema IS mapeada. Devolve o histórico de
-   * atendimentos já realizados com status "completed" enquanto isso não é
-   * mapeado.
+   * agendamento futuro do Sistema IS mapeada. Diferente do e-SUS PEC (que é
+   * open-source), o Sistema IS é proprietário e não tem documentação
+   * técnica pública pra pesquisar — precisa que o cliente confirme a
+   * tabela real (mesmo padrão usado pra `cdg_paciente`/`cdg_contato`: DDL
+   * ou um `information_schema.columns` filtrando por "agenda"). Devolve o
+   * histórico de atendimentos já realizados com status "completed"
+   * enquanto isso não é mapeado.
    */
   async findAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
     const rows = await this.findAttendanceRows(patientId);

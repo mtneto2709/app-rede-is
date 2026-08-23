@@ -70,13 +70,21 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * ATENÇÃO(sem dado de agenda futura): não há, na referência disponível,
-   * nenhuma tabela de agendamento/agenda futura do e-SUS PEC mapeada (o
-   * módulo de agenda da equipe é bem mais complexo — regras de recorrência,
-   * cotas por profissional etc.). Enquanto isso não for mapeado, devolve o
-   * histórico de atendimentos JÁ REALIZADOS com status "completed" — dá pra
-   * tela de agendamentos mostrar consultas passadas reais em vez de ficar
-   * vazia, mas nenhuma consulta futura ainda marcada aparece aqui.
+   * ATENÇÃO(sem dado de agenda futura): tentei mapear a tabela de
+   * agendamento/agenda futura do e-SUS PEC (manuais oficiais em
+   * aps.saude.gov.br/sisaps.saude.gov.br e a doc técnica de integração em
+   * integracao.esusaps.bridge.ufsc.tech estão bloqueados pela rede deste
+   * ambiente; o código-fonte oficial do PEC não está disponível
+   * publicamente; o layer CDS/RAS exportado pro servidor nacional — os
+   * .thrift em laboratoriobridge/esusaps-integracao no GitHub — não inclui
+   * agenda, porque agendamento é dado local, nunca exportado) e não
+   * consegui confirmar o nome real da tabela. Enquanto isso não for
+   * mapeado, devolve o histórico de atendimentos JÁ REALIZADOS com status
+   * "completed" — dá pra tela de agendamentos mostrar consultas passadas
+   * reais (aba "Passados") em vez de ficar vazia, mas nenhuma consulta
+   * futura ainda marcada aparece aqui (aba "Futuros" fica vazia até essa
+   * tabela ser confirmada — ver TODO em findDocumentsByPatient pro mesmo
+   * padrão aplicado a documentos).
    */
   async findAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
     const rows = await this.findAttendanceRows(patientId);
@@ -152,8 +160,21 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     );
   }
 
+  /**
+   * TODO(db-mapping): mesma situação da agenda futura (ver
+   * findAppointmentsByPatient) — não consegui confirmar, pelas fontes
+   * disponíveis, uma tabela dedicada a documentos clínicos emitidos
+   * (receita, atestado, declaração de comparecimento) no e-SUS PEC.
+   * Levantei a hipótese de que declaração de comparecimento e atestado
+   * sejam gerados sob demanda a partir do próprio atendimento (dado já
+   * disponível em tb_atend/tb_prontuario, sem tabela própria) em vez de
+   * arquivados como entidade separada, mas não tenho como confirmar sem
+   * acesso à doc técnica ou ao código-fonte do PEC. Preciso que me passem
+   * o resultado de um information_schema.columns filtrando tabelas com
+   * "receita"/"atestado"/"prescricao"/"documento"/"declaracao" no nome
+   * (mesmo padrão usado pra confirmar o schema de vacinação).
+   */
   async findDocumentsByPatient(_patientId: string): Promise<Document[]> {
-    // TODO(db-mapping): mapear documentos/prescrições no e-SUS PEC
     return [];
   }
 
