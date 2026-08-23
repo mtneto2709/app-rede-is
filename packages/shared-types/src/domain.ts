@@ -153,6 +153,59 @@ export const DashboardStats = z.object({
 });
 export type DashboardStats = z.infer<typeof DashboardStats>;
 
+/**
+ * Resumo usado pra sobrepor dado real do paciente nos moldes de cartão
+ * configurados pelo tenant (ver `TenantTheme.cards`) — nome sempre
+ * disponível (mesma fonte do questionário de primeiro acesso); `cns` pode
+ * vir `null` quando a coluna do CNS não estiver mapeada na base de origem.
+ */
+export const PatientProfileSummary = z.object({
+  name: z.string(),
+  cns: z.string().nullable(),
+});
+export type PatientProfileSummary = z.infer<typeof PatientProfileSummary>;
+
+/**
+ * Uma comorbidade/condição de saúde estruturada do paciente (hipertensão,
+ * diabetes etc). `source` é o texto original vindo da base, sem
+ * normalização — quem exibe decide o rótulo.
+ */
+export const HealthCondition = z.object({
+  id: z.string(),
+  label: z.string(),
+});
+export type HealthCondition = z.infer<typeof HealthCondition>;
+
+export const ContinuousMedication = z.object({
+  id: z.string(),
+  name: z.string(),
+  dosage: z.string().nullable(),
+});
+export type ContinuousMedication = z.infer<typeof ContinuousMedication>;
+
+export const ExamResult = z.object({
+  id: z.string(),
+  name: z.string(),
+  requestedAt: z.string().nullable(),
+  resultAt: z.string().nullable(),
+  result: z.string().nullable(),
+});
+export type ExamResult = z.infer<typeof ExamResult>;
+
+/**
+ * `available: false` quando a base de origem do paciente ainda não tem
+ * nenhuma dessas três informações mapeadas — cada lista, individualmente,
+ * pode vir vazia mesmo com `available: true` (significa "mapeado, mas o
+ * paciente não tem nenhum registro"), diferente de "não mapeado ainda".
+ */
+export const HealthSummary = z.object({
+  available: z.boolean(),
+  conditions: z.array(HealthCondition),
+  medications: z.array(ContinuousMedication),
+  exams: z.array(ExamResult),
+});
+export type HealthSummary = z.infer<typeof HealthSummary>;
+
 // --- Entidades do banco de controle (próprio) ---
 
 export const PlatformUser = z.object({

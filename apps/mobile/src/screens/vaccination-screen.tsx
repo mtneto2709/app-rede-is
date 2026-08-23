@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { VaccinationCardEntry, VaccinationCardResponse } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
+import { ScreenHeader } from "@/components/screen-header";
 
 const STATUS_LABEL: Record<VaccinationCardEntry["status"], string> = {
   administered: "Tomada",
@@ -38,7 +39,7 @@ export function VaccinationScreen(): ReactElement {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Caderneta de Vacinação</Text>
+      <ScreenHeader title="Caderneta de Vacinação" />
       {isLoading && <ActivityIndicator style={{ marginTop: 24 }} color={theme.colors.primary} />}
       {error && <Text style={styles.error}>{error}</Text>}
       {!isLoading && data && !data.available && (
@@ -91,7 +92,6 @@ export function VaccinationScreen(): ReactElement {
 function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
-    title: { fontSize: 18, fontWeight: "600", color: theme.colors.textPrimary, paddingHorizontal: 20, paddingVertical: 16 },
     error: { color: theme.colors.danger, paddingHorizontal: 20 },
     empty: { color: theme.colors.textSecondary, paddingHorizontal: 20 },
     sectionTitle: { fontSize: 14, fontWeight: "700", color: theme.colors.textPrimary },

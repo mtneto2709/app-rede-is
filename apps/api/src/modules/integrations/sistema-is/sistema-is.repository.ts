@@ -1,10 +1,11 @@
-import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { getSistemaIsConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
 import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
 import type {
+  HealthSummaryResult,
   IdentityCandidate,
   IdentityProfile,
   PatientSourceRepository,
@@ -25,6 +26,7 @@ import type {
  */
 @Injectable()
 export class SistemaIsRepository implements PatientSourceRepository, OnModuleDestroy {
+  private readonly logger = new Logger(SistemaIsRepository.name);
   private readonly pool: ReadOnlyPool;
 
   constructor(@Inject(ENV) env: Env) {
@@ -221,6 +223,40 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
       mobilePhones: row.celulares ?? [],
       emails: row.emails ?? [],
     };
+  }
+
+  /**
+   * ATENÇÃO(coluna não confirmada): não tenho o nome exato da coluna de CNS
+   * em `sotech.cdg_paciente` — o comentário no topo deste arquivo registra
+   * que o DDL real da tabela tinha uma coluna de CNS (visto em sessão
+   * anterior), mas o texto do DDL em si não ficou salvo no repositório.
+   * `cns` é o melhor palpite, seguindo o mesmo padrão curto de `cpf` nessa
+   * tabela — mas é só palpite. Isolado com try/catch: se o nome estiver
+   * errado, só o número do cartão fica ausente na tela de Cartões.
+   */
+  async getPatientCns(sourcePatientId: string): Promise<string | null> {
+    try {
+      const rows = await this.pool.query<{ cns: string | null }>(
+        `SELECT cns FROM sotech.cdg_paciente WHERE pkpaciente = $1`,
+        [sourcePatientId],
+      );
+      return rows[0]?.cns ?? null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar CNS (coluna não confirmada) do paciente ${sourcePatientId}: ${message}`);
+      return null;
+    }
+  }
+
+  /**
+   * TODO(db-mapping): Sistema IS é proprietário, sem documentação técnica
+   * pública — precisa que o cliente confirme se/onde comorbidades,
+   * medicamento de uso contínuo e resultado de exame são registrados
+   * (mesmo padrão usado pra `cdg_paciente`/`cdg_contato`: DDL ou
+   * information_schema.columns).
+   */
+  async getHealthSummary(_sourcePatientId: string): Promise<HealthSummaryResult> {
+    return { available: false, conditions: [], medications: [], exams: [] };
   }
 
   async onModuleDestroy() {

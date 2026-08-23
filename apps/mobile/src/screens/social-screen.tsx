@@ -2,6 +2,7 @@ import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/theme/theme-provider";
 import { withAlpha } from "@/theme/tone";
+import { ScreenHeader } from "@/components/screen-header";
 
 /**
  * Cores das próprias redes sociais (identidade da marca de terceiros, não
@@ -29,7 +30,7 @@ export function SocialScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Redes Sociais</Text>
+      <ScreenHeader title="Redes Sociais" />
       {theme.socialLinks.length === 0 && (
         <Text style={styles.empty}>Nenhuma rede social cadastrada.</Text>
       )}
@@ -64,7 +65,6 @@ export function SocialScreen() {
 function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
-    title: { fontSize: 18, fontWeight: "600", color: theme.colors.textPrimary, paddingHorizontal: 20, paddingVertical: 16 },
     empty: { color: theme.colors.textSecondary, paddingHorizontal: 20 },
     card: {
       flexDirection: "row",

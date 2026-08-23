@@ -17,6 +17,7 @@ import {
   Settings,
 } from "lucide-react";
 import type { DashboardStats } from "@rede-is/shared-types";
+import type { TenantTheme } from "@rede-is/theme-tokens";
 import { useMeQuery } from "@/lib/use-me-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TONE_BG, TONE_TEXT, toneAt, type Tone } from "@/lib/tone";
@@ -27,34 +28,48 @@ interface Banner {
   imageUrl?: string;
 }
 
+type Feature = keyof TenantTheme["features"];
+
 const QUICK_ACCESS = [
-  { key: "attendancesCount", label: "Atendimentos", href: "/atendimentos", icon: UserCheck, tone: "primary" },
-  { key: "appointmentsCount", label: "Agendamentos", href: "/agendamentos", icon: Calendar, tone: "secondary" },
-  { key: "alertsCount", label: "Alertas", href: "/alertas", icon: Bell, tone: "warning" },
-  { key: "documentsCount", label: "Documentos", href: "/documentos", icon: FileText, tone: "success" },
-] as const satisfies { key: keyof DashboardStats; label: string; href: string; icon: typeof Calendar; tone: Tone }[];
+  { key: "attendancesCount", label: "Atendimentos", href: "/atendimentos", icon: UserCheck, tone: "primary", feature: "atendimentos" },
+  { key: "appointmentsCount", label: "Agendamentos", href: "/agendamentos", icon: Calendar, tone: "secondary", feature: "agendamentos" },
+  { key: "alertsCount", label: "Alertas", href: "/alertas", icon: Bell, tone: "warning", feature: null },
+  { key: "documentsCount", label: "Documentos", href: "/documentos", icon: FileText, tone: "success", feature: null },
+] as const satisfies {
+  key: keyof DashboardStats;
+  label: string;
+  href: string;
+  icon: typeof Calendar;
+  tone: Tone;
+  feature: Feature | null;
+}[];
 
 const SERVICES = [
-  { name: "Agendamentos", icon: Calendar, href: "/agendamentos" },
-  { name: "Teleconsulta", icon: Video, href: "/agendamentos" },
-  { name: "Atendimentos", icon: UserCheck, href: "/atendimentos" },
-  { name: "Vacinação", icon: BriefcaseMedical, href: "/vacinacao" },
-  { name: "Meus Cartões", icon: CreditCard, href: "/perfil" },
-  { name: "Unidades", icon: MapPin, href: "/unidades" },
-  { name: "Minha Saúde", icon: Heart, href: "/documentos" },
-  { name: "Mais Serviços", icon: MoreHorizontal, href: "/perfil" },
-];
+  { name: "Agendamentos", icon: Calendar, href: "/agendamentos", feature: "agendamentos" },
+  { name: "Teleconsulta", icon: Video, href: "/teleconsulta", feature: "teleconsulta" },
+  { name: "Atendimentos", icon: UserCheck, href: "/atendimentos", feature: "atendimentos" },
+  { name: "Vacinação", icon: BriefcaseMedical, href: "/vacinacao", feature: "vacinacao" },
+  { name: "Meus Cartões", icon: CreditCard, href: "/cartoes", feature: "cartoes" },
+  { name: "Unidades", icon: MapPin, href: "/unidades", feature: "unidades" },
+  { name: "Minha Saúde", icon: Heart, href: "/minha-saude", feature: "minhaSaude" },
+  { name: "Mais Serviços", icon: MoreHorizontal, href: "/mais-servicos", feature: "maisServicos" },
+] as const satisfies { name: string; icon: typeof Calendar; href: string; feature: Feature }[];
 
 export function DashboardHome({
   appName,
   logoUrl,
   banners,
+  features,
 }: {
   appName: string;
   logoUrl: string;
   banners: Banner[];
+  features: TenantTheme["features"];
 }) {
   const { data: stats, isLoading } = useMeQuery<DashboardStats>("dashboard");
+
+  const quickAccess = QUICK_ACCESS.filter((item) => item.feature === null || features[item.feature]);
+  const services = SERVICES.filter((service) => features[service.feature]);
 
   return (
     <div>
@@ -89,7 +104,7 @@ export function DashboardHome({
 
       <section className="px-6 mb-8">
         <div className="grid grid-cols-2 gap-4">
-          {QUICK_ACCESS.map((item) => (
+          {quickAccess.map((item) => (
             <Link key={item.key} href={item.href} className="rounded-2xl bg-surface shadow-sm p-4 flex flex-col gap-2">
               <div className={`h-9 w-9 rounded-full flex items-center justify-center ${TONE_BG[item.tone]}`}>
                 <item.icon className={`h-4 w-4 ${TONE_TEXT[item.tone]}`} />
@@ -109,7 +124,7 @@ export function DashboardHome({
 
       <section className="px-6 mb-8">
         <div className="grid grid-cols-4 gap-4">
-          {SERVICES.map((service, index) => {
+          {services.map((service, index) => {
             const tone = toneAt(index);
             return (
               <Link key={service.name} href={service.href} className="flex flex-col items-center gap-2">

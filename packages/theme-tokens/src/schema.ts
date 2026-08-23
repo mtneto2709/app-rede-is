@@ -87,5 +87,69 @@ export const TenantTheme = z.object({
       }),
     )
     .default([]),
+
+  /**
+   * Liga/desliga cada botão do app por cliente. Quando `false`, a tela e a
+   * rota correspondente ficam indisponíveis (ver `notFound()` nas páginas
+   * do web e a montagem condicional dos `Tab.Screen` no mobile) — não é só
+   * um "esconder botão". `maisServicos` controla a própria tela de mais
+   * serviços (Contato/Redes Sociais/links do cliente).
+   */
+  features: z
+    .object({
+      agendamentos: z.boolean().default(true),
+      teleconsulta: z.boolean().default(true),
+      atendimentos: z.boolean().default(true),
+      vacinacao: z.boolean().default(true),
+      cartoes: z.boolean().default(true),
+      unidades: z.boolean().default(true),
+      minhaSaude: z.boolean().default(true),
+      maisServicos: z.boolean().default(true),
+    })
+    .default({}),
+
+  /**
+   * Cartões virtuais do paciente (SUS + cartões próprios do cliente, ex.
+   * cartão do munícipe). As imagens são só o "molde" (frente/verso) — nome
+   * e número do cartão do paciente são sobrepostos em tempo de execução
+   * pelo app, nunca gravados na imagem. `showCns` liga a sobreposição do
+   * número do CNS (só faz sentido pro cartão "sus"; cartões próprios do
+   * cliente normalmente não têm esse dado).
+   */
+  cards: z
+    .array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        frontImageUrl: z.string(),
+        // `.optional()` pelo mesmo motivo do `banners[].imageUrl` acima —
+        // sobrevive à ponte nativa do Expo Go, `.nullable()` não.
+        backImageUrl: z.string().optional(),
+        showPatientName: z.boolean().default(true),
+        showCns: z.boolean().default(false),
+      }),
+    )
+    .default([]),
+
+  /**
+   * Links configuráveis pelo cliente na tela "Mais Serviços" — tanto pra
+   * rotas internas do app quanto pra URLs externas (site da prefeitura,
+   * ouvidoria, etc). `icon` é um conjunto fixo e pequeno pra funcionar nas
+   * duas plataformas sem depender do nome exato de um ícone de uma lib
+   * específica (lucide no web, Ionicons no mobile — cada um mapeia esses
+   * valores pro próprio ícone).
+   */
+  customLinks: z
+    .array(
+      z.object({
+        icon: z
+          .enum(["link", "globe", "phone", "mail", "info", "megaphone", "building", "file-text", "heart", "star", "map-pin", "shield"])
+          .default("link"),
+        title: z.string(),
+        subtitle: z.string().optional(),
+        url: z.string(),
+      }),
+    )
+    .default([]),
 });
 export type TenantTheme = z.infer<typeof TenantTheme>;

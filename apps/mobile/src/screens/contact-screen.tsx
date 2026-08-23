@@ -2,6 +2,7 @@ import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/theme/theme-provider";
 import { withAlpha } from "@/theme/tone";
+import { ScreenHeader } from "@/components/screen-header";
 
 export function ContactScreen() {
   const theme = useTheme();
@@ -10,7 +11,7 @@ export function ContactScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Entre em Contato</Text>
+      <ScreenHeader title="Entre em Contato" />
       <View style={{ paddingHorizontal: 20, gap: 12 }}>
         {phone && (
           <View style={styles.card}>
@@ -53,7 +54,6 @@ export function ContactScreen() {
 function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
-    title: { fontSize: 18, fontWeight: "600", color: theme.colors.textPrimary, paddingHorizontal: 20, paddingVertical: 16 },
     card: {
       flexDirection: "row",
       alignItems: "center",

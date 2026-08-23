@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { getEsusPecConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
@@ -6,6 +6,7 @@ import { ReadOnlyPool } from "../../../common/database/read-only-pool";
 import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
 import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
 import type {
+  HealthSummaryResult,
   IdentityCandidate,
   IdentityProfile,
   PatientSourceRepository,
@@ -53,6 +54,7 @@ export interface AdministeredVaccine {
  */
 @Injectable()
 export class EsusPecRepository implements PatientSourceRepository, OnModuleDestroy {
+  private readonly logger = new Logger(EsusPecRepository.name);
   private readonly pool: ReadOnlyPool;
 
   constructor(@Inject(ENV) env: Env) {
@@ -373,6 +375,51 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       mobilePhones: [row.nu_telefone_celular, row.nu_telefone_contato].filter((v): v is string => !!v),
       emails: row.ds_email ? [row.ds_email] : [],
     };
+  }
+
+  /**
+   * ATENÇÃO(coluna não confirmada): `nu_cns` segue o mesmo padrão de
+   * `nu_telefone_celular`/`nu_cpf` (já confirmados em `tb_cidadao`), mas não
+   * consegui confirmar esse nome específico — rede bloqueada pra doc
+   * técnica, sem acesso ao código-fonte do PEC. Por isso fica isolado deste
+   * método (fora de `getIdentityProfile`, usado no login/questionário) e com
+   * try/catch: se o nome da coluna estiver errado, só o número do cartão
+   * some da tela de Cartões, o resto do app continua de pé.
+   */
+  async getPatientCns(sourcePatientId: string): Promise<string | null> {
+    try {
+      const rows = await this.pool.query<{ nu_cns: string | null }>(
+        `SELECT nu_cns FROM public.tb_cidadao WHERE co_seq_cidadao = $1`,
+        [sourcePatientId],
+      );
+      return rows[0]?.nu_cns ?? null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar CNS (coluna não confirmada) do cidadão ${sourcePatientId}: ${message}`);
+      return null;
+    }
+  }
+
+  /**
+   * TODO(db-mapping): confirmei, pelo layout CDS/RAS exportado pro servidor
+   * nacional (thrift oficial de `laboratoriobridge/esusaps-integracao` no
+   * GitHub, ficha `cadastro_individual`), que o e-SUS PEC CAPTURA
+   * comorbidades estruturadas no Cadastro Individual — campos como
+   * `statusTemDiabetes`, `statusTemHipertensaoArterial`,
+   * `statusTemDoencaRespiratoria`, `statusTemTeveDoencasRins`,
+   * `statusTeveDoencaCardiaca` e texto livre em `descricaoOutraCondicao1/2/3`.
+   * Isso é forte indício de que a base operacional tem uma tabela
+   * equivalente (provavelmente ligada a `tb_cidadao` ou a um cadastro
+   * domiciliar/familiar), mas não consegui confirmar o nome real da
+   * tabela/colunas — esses nomes são do formato de EXPORTAÇÃO (CDS), não do
+   * schema interno do Postgres. Medicamento de uso contínuo e resultado de
+   * exame eu não confirmei nem a existência conceitual ainda.
+   * Preciso de um information_schema.columns filtrando por
+   * "condicao"/"problema"/"medicamento"/"exame"/"resultado" pra mapear de
+   * verdade — mesmo padrão usado pra vacinação.
+   */
+  async getHealthSummary(_sourcePatientId: string): Promise<HealthSummaryResult> {
+    return { available: false, conditions: [], medications: [], exams: [] };
   }
 
   async onModuleDestroy() {

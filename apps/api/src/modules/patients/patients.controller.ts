@@ -43,4 +43,14 @@ export class PatientsController {
   getVaccinationCard(@CurrentUser() user: CurrentUserPayload, @Req() req: TenantRequest) {
     return this.patients.getVaccinationCard(user.tenantId, user.userId, req.ip);
   }
+
+  @Get("profile")
+  getProfile(@CurrentUser() user: CurrentUserPayload, @Req() req: TenantRequest) {
+    return this.patients.getProfileSummary(user.tenantId, user.userId, req.ip);
+  }
+
+  @Get("health-summary")
+  getHealthSummary(@CurrentUser() user: CurrentUserPayload, @Req() req: TenantRequest) {
+    return this.patients.getHealthSummary(user.tenantId, user.userId, req.ip);
+  }
 }

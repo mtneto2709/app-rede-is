@@ -3,6 +3,7 @@ import { ActivityIndicator, SafeAreaView, StyleSheet, Text, Pressable, View } fr
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/theme/theme-provider";
 import { authApi } from "@/lib/api-client";
+import { ScreenHeader } from "@/components/screen-header";
 
 export function ProfileScreen() {
   const theme = useTheme();
@@ -24,8 +25,8 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Meu Perfil</Text>
-
+      <ScreenHeader title="Meu Perfil" />
+      <View style={styles.content}>
       <View style={styles.card}>
         <Text style={styles.cardText}>
           Seus dados cadastrais (nome, CPF, cartão SUS) vêm diretamente do Sistema IS / e-SUS PEC e não podem ser
@@ -62,14 +63,15 @@ export function ProfileScreen() {
           </>
         )}
       </View>
+      </View>
     </SafeAreaView>
   );
 }
 
 function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background, padding: 20, gap: 16 },
-    title: { fontSize: 18, fontWeight: "600", color: theme.colors.textPrimary },
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    content: { padding: 20, gap: 16 },
     card: { backgroundColor: theme.colors.surface, borderRadius: 16, padding: 16, gap: 10 },
     cardText: { fontSize: 13, color: theme.colors.textSecondary },
     outlineButton: { borderWidth: 1, borderColor: `${theme.colors.primary}40`, borderRadius: 12, paddingVertical: 14, alignItems: "center" },

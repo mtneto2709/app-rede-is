@@ -3,5 +3,12 @@ import { DashboardHome } from "@/components/dashboard-home";
 
 export default async function DashboardPage() {
   const theme = await getCurrentTenantTheme();
-  return <DashboardHome appName={theme.branding.appName} logoUrl={theme.branding.logoLightUrl} banners={theme.banners} />;
+  return (
+    <DashboardHome
+      appName={theme.branding.appName}
+      logoUrl={theme.branding.logoLightUrl}
+      banners={theme.banners}
+      features={theme.features}
+    />
+  );
 }

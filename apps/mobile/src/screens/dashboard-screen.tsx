@@ -3,45 +3,47 @@ import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import type { DashboardStats } from "@rede-is/shared-types";
+import type { TenantTheme } from "@rede-is/theme-tokens";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
 import { toneColorAt, withAlpha } from "@/theme/tone";
 import type { MainTabParamList } from "@/navigation/root-navigator";
 
+type Feature = keyof TenantTheme["features"];
+
 const QUICK_ACCESS = [
-  { key: "attendancesCount", label: "Atendimentos", tab: "Atendimentos", icon: "medkit-outline" },
-  { key: "appointmentsCount", label: "Agendamentos", tab: "Agendamentos", icon: "calendar-outline" },
-  { key: "alertsCount", label: "Alertas", tab: "Alertas", icon: "notifications-outline" },
-  { key: "documentsCount", label: "Documentos", tab: "Documentos", icon: "document-text-outline" },
+  { key: "attendancesCount", label: "Atendimentos", tab: "Atendimentos", icon: "medkit-outline", feature: "atendimentos" },
+  { key: "appointmentsCount", label: "Agendamentos", tab: "Agendamentos", icon: "calendar-outline", feature: "agendamentos" },
+  { key: "alertsCount", label: "Alertas", tab: "Alertas", icon: "notifications-outline", feature: null },
+  { key: "documentsCount", label: "Documentos", tab: "Documentos", icon: "document-text-outline", feature: null },
 ] as const satisfies {
   key: keyof DashboardStats;
   label: string;
   tab: keyof MainTabParamList;
   icon: keyof typeof Ionicons.glyphMap;
+  feature: Feature | null;
 }[];
 
-/**
- * Mesmo diretório de serviços da home do web (dashboard-home.tsx) — como o
- * mobile não tem uma tela própria pra alguns desses ainda (Teleconsulta,
- * Meus Cartões, Minha Saúde, Mais Serviços), eles apontam pra uma aba
- * existente como placeholder, igual o web já faz.
- */
+/** Mesmo diretório de serviços da home do web (dashboard-home.tsx). */
 const SERVICES = [
-  { name: "Agendamentos", icon: "calendar-outline", tab: "Agendamentos" },
-  { name: "Teleconsulta", icon: "videocam-outline", tab: "Agendamentos" },
-  { name: "Atendimentos", icon: "medkit-outline", tab: "Atendimentos" },
-  { name: "Vacinação", icon: "medical-outline", tab: "Vacinacao" },
-  { name: "Meus Cartões", icon: "card-outline", tab: "Perfil" },
-  { name: "Unidades", icon: "business-outline", tab: "Unidades" },
-  { name: "Minha Saúde", icon: "heart-outline", tab: "Documentos" },
-  { name: "Mais Serviços", icon: "ellipsis-horizontal", tab: "Perfil" },
-] as const satisfies { name: string; icon: keyof typeof Ionicons.glyphMap; tab: keyof MainTabParamList }[];
+  { name: "Agendamentos", icon: "calendar-outline", tab: "Agendamentos", feature: "agendamentos" },
+  { name: "Teleconsulta", icon: "videocam-outline", tab: "Teleconsulta", feature: "teleconsulta" },
+  { name: "Atendimentos", icon: "medkit-outline", tab: "Atendimentos", feature: "atendimentos" },
+  { name: "Vacinação", icon: "medical-outline", tab: "Vacinacao", feature: "vacinacao" },
+  { name: "Meus Cartões", icon: "card-outline", tab: "Cartoes", feature: "cartoes" },
+  { name: "Unidades", icon: "business-outline", tab: "Unidades", feature: "unidades" },
+  { name: "Minha Saúde", icon: "heart-outline", tab: "MinhaSaude", feature: "minhaSaude" },
+  { name: "Mais Serviços", icon: "ellipsis-horizontal", tab: "MaisServicos", feature: "maisServicos" },
+] as const satisfies { name: string; icon: keyof typeof Ionicons.glyphMap; tab: keyof MainTabParamList; feature: Feature }[];
 
 export function DashboardScreen() {
   const { data: stats } = useMeQuery<DashboardStats>("dashboard");
   const theme = useTheme();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const styles = createStyles(theme);
+
+  const quickAccess = QUICK_ACCESS.filter((item) => item.feature === null || theme.features[item.feature]);
+  const services = SERVICES.filter((service) => theme.features[service.feature]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -60,7 +62,7 @@ export function DashboardScreen() {
         </View>
 
         <View style={styles.grid}>
-          {QUICK_ACCESS.map((item, index) => {
+          {quickAccess.map((item, index) => {
             const color = toneColorAt(theme, index);
             return (
               <Pressable key={item.key} style={styles.gridItem} onPress={() => navigation.navigate(item.tab)}>
@@ -75,7 +77,7 @@ export function DashboardScreen() {
         </View>
 
         <View style={styles.servicesGrid}>
-          {SERVICES.map((service, index) => {
+          {services.map((service, index) => {
             const color = toneColorAt(theme, index);
             return (
               <Pressable

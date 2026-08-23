@@ -1,5 +1,10 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
-import type { DashboardStats, VaccinationCardResponse } from "@rede-is/shared-types";
+import type {
+  DashboardStats,
+  HealthSummary,
+  PatientProfileSummary,
+  VaccinationCardResponse,
+} from "@rede-is/shared-types";
 import { PrismaService } from "../../common/prisma/prisma.service";
 import { AuditService } from "../../common/audit/audit.service";
 import { SistemaIsRepository } from "../integrations/sistema-is/sistema-is.repository";
@@ -139,6 +144,25 @@ export class PatientsService {
     const entries = this.vaccination.buildCard(profile?.birthDate ?? null, calendar, administered);
     await this.logRead(tenantId, userId, "patients.vaccination_card.read", ip);
     return { available: true, entries };
+  }
+
+  /** Nome + CNS pra sobrepor nos moldes de cartão do tenant (tela Meus Cartões). */
+  async getProfileSummary(tenantId: string, userId: string, ip?: string): Promise<PatientProfileSummary> {
+    const link = await this.requireLink(userId);
+    const repo = this.repositoryFor(link.sourceSystem);
+    const [profile, cns] = await Promise.all([
+      repo.getIdentityProfile(link.sourcePatientId),
+      repo.getPatientCns(link.sourcePatientId),
+    ]);
+    await this.logRead(tenantId, userId, "patients.profile.read", ip);
+    return { name: profile?.name ?? "", cns };
+  }
+
+  async getHealthSummary(tenantId: string, userId: string, ip?: string): Promise<HealthSummary> {
+    const link = await this.requireLink(userId);
+    const result = await this.repositoryFor(link.sourceSystem).getHealthSummary(link.sourcePatientId);
+    await this.logRead(tenantId, userId, "patients.health_summary.read", ip);
+    return result;
   }
 }
 

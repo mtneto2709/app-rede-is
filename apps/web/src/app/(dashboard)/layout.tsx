@@ -3,7 +3,6 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { BottomNav } from "@/components/bottom-nav";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { accessToken, isLoading } = useAuth();
@@ -17,10 +16,5 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     return <main className="min-h-screen flex items-center justify-center text-text-secondary">Carregando...</main>;
   }
 
-  return (
-    <div className="max-w-md mx-auto min-h-screen bg-app pb-20">
-      {children}
-      <BottomNav />
-    </div>
-  );
+  return <div className="max-w-md mx-auto min-h-screen bg-app pb-6">{children}</div>;
 }

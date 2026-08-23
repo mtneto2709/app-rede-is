@@ -4,6 +4,7 @@ import type { Appointment } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
 import { Card } from "@/components/screen-list";
+import { ScreenHeader } from "@/components/screen-header";
 
 const STATUS_LABEL: Record<Appointment["status"], string> = {
   scheduled: "Agendado",
@@ -34,7 +35,7 @@ export function AppointmentsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Agendamentos</Text>
+      <ScreenHeader title="Agendamentos" />
       <View style={styles.tabBar}>
         <Pressable
           style={[styles.tabButton, tab === "futuros" && styles.tabButtonActive]}
@@ -84,7 +85,6 @@ export function AppointmentsScreen() {
 function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
-    title: { fontSize: 18, fontWeight: "600", color: theme.colors.textPrimary, paddingHorizontal: 20, paddingTop: 16 },
     error: { color: theme.colors.danger, paddingHorizontal: 20 },
     empty: { color: theme.colors.textSecondary, paddingHorizontal: 20 },
     tabBar: {

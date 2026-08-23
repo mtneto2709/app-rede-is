@@ -1,7 +1,10 @@
 import type {
   Appointment,
   Attendance,
+  ContinuousMedication,
   Document,
+  ExamResult,
+  HealthCondition,
   HealthUnit,
   Patient,
 } from "@rede-is/shared-types";
@@ -33,6 +36,14 @@ export interface IdentityProfile {
   emails: string[];
 }
 
+/** Resultado de `getHealthSummary` — `available: false` quando nada foi mapeado ainda nessa base (ver HealthSummary em shared-types). */
+export interface HealthSummaryResult {
+  available: boolean;
+  conditions: HealthCondition[];
+  medications: ContinuousMedication[];
+  exams: ExamResult[];
+}
+
 /**
  * Contrato implementado tanto pelo repositório do Sistema IS quanto pelo do
  * e-SUS PEC, para que `PatientsService` possa consultar as duas bases de
@@ -50,4 +61,16 @@ export interface PatientSourceRepository {
   findIdentityCandidatesByContact(contact: string): Promise<IdentityCandidate[]>;
   /** Perfil completo de identidade de um cadastro específico, para gerar o questionário. */
   getIdentityProfile(sourcePatientId: string): Promise<IdentityProfile | null>;
+  /**
+   * Número do CNS (Cartão Nacional de Saúde) do paciente, para a tela de
+   * Meus Cartões. Isolado de `getIdentityProfile` de propósito: a coluna
+   * usada aqui não está confirmada em nenhuma das duas bases (ver comentário
+   * na implementação), então cada repositório deve capturar erro de query
+   * internamente e devolver `null` em vez de propagar — se o nome da coluna
+   * estiver errado, só o número do cartão fica ausente, sem derrubar login,
+   * dashboard ou questionário (que usam `getIdentityProfile`, não este).
+   */
+  getPatientCns(sourcePatientId: string): Promise<string | null>;
+  /** Comorbidades, medicamentos de uso contínuo e resultados de exame — ver HealthSummaryResult. */
+  getHealthSummary(sourcePatientId: string): Promise<HealthSummaryResult>;
 }

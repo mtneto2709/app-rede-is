@@ -53,5 +53,29 @@
       "description": "Acompanhe seus atendimentos, agendamentos e documentos em um só lugar.",
       "order": 1
     }
+  ],
+  "features": {
+    "agendamentos": true,
+    "teleconsulta": true,
+    "atendimentos": true,
+    "vacinacao": true,
+    "cartoes": true,
+    "unidades": true,
+    "minhaSaude": true,
+    "maisServicos": true
+  },
+  "cards": [
+    {
+      "id": "sus",
+      "title": "Cartão Nacional de Saúde",
+      "frontImageUrl": "/clients/demo/cards/sus-front.png",
+      "backImageUrl": "/clients/demo/cards/sus-back.png",
+      "showPatientName": true,
+      "showCns": true
+    }
+  ],
+  "customLinks": [
+    { "icon": "building", "title": "Prefeitura", "subtitle": "Site oficial do município", "url": "https://www.gov.br" },
+    { "icon": "megaphone", "title": "Ouvidoria", "subtitle": "Reclamações, elogios e sugestões", "url": "https://falabr.cgu.gov.br" }
   ]
 }
