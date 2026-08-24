@@ -3,7 +3,11 @@ import { getEsusPecConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthCondition, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
-import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
+import {
+  classifyAppointmentStatus,
+  classifyAppointmentType,
+  classifyAttendanceType,
+} from "../../../common/utils/attendance-classification";
 import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
 import type {
   HealthSummaryResult,
@@ -49,7 +53,9 @@ export interface AdministeredVaccine {
  * catálogo real de colunas do schema de vacinação (information_schema —
  * tb_calendario_vacinal, tb_regra_vacinal_estrategia,
  * tb_faixa_etaria_vacinacao, tb_imunobiologico, tb_dose_imunobiologico,
- * tb_vacinacao, tb_registro_vacinacao). `findPatientByCpf`,
+ * tb_vacinacao, tb_registro_vacinacao). `findAppointmentsByPatient`
+ * confirmado com uma query real do cliente contra `tb_agendado` (agenda
+ * passada e futura, com status via `tb_situacao_agendado`). `findPatientByCpf`,
  * `findDocumentsByPatient` etc. continuam placeholders.
  */
 @Injectable()
@@ -72,33 +78,56 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * ATENÇÃO(sem dado de agenda futura): tentei mapear a tabela de
-   * agendamento/agenda futura do e-SUS PEC (manuais oficiais em
-   * aps.saude.gov.br/sisaps.saude.gov.br e a doc técnica de integração em
-   * integracao.esusaps.bridge.ufsc.tech estão bloqueados pela rede deste
-   * ambiente; o código-fonte oficial do PEC não está disponível
-   * publicamente; o layer CDS/RAS exportado pro servidor nacional — os
-   * .thrift em laboratoriobridge/esusaps-integracao no GitHub — não inclui
-   * agenda, porque agendamento é dado local, nunca exportado) e não
-   * consegui confirmar o nome real da tabela. Enquanto isso não for
-   * mapeado, devolve o histórico de atendimentos JÁ REALIZADOS com status
-   * "completed" — dá pra tela de agendamentos mostrar consultas passadas
-   * reais (aba "Passados") em vez de ficar vazia, mas nenhuma consulta
-   * futura ainda marcada aparece aqui (aba "Futuros" fica vazia até essa
-   * tabela ser confirmada — ver TODO em findDocumentsByPatient pro mesmo
-   * padrão aplicado a documentos).
+   * Confirmado: schema repassado pelo cliente com uma query real que já
+   * roda em produção — `public.tb_agendado` (a agenda em si, passada e
+   * futura) + `tb_situacao_agendado` (status do slot, via `a.st_agendado`)
+   * + `tb_prontuario`/`tb_lotacao`/`tb_prof`/`tb_cbo` pro profissional,
+   * mesmo caminho já confirmado em `findAttendanceRows`. `id` é uma chave
+   * sintética (`co_prontuario` + `hr_inicial_agendado` + `co_lotacao_agendada`)
+   * em vez de uma PK real de `tb_agendado` — a query do cliente nunca
+   * seleciona a PK dessa tabela, e como esse dado é só leitura (nunca serve
+   * de referência pra escrita), não vale o risco de chutar o nome dela.
+   * `type` não tem coluna própria aqui (o `no_cbo` do profissional é o
+   * sinal mais próximo disponível) — classificado por palavra-chave com
+   * fallback pra "consultation", igual o resto da base.
    */
   async findAppointmentsByPatient(patientId: string): Promise<Appointment[]> {
-    const rows = await this.findAttendanceRows(patientId);
+    const rows = await this.pool.query<{
+      appointment_id: string;
+      scheduled_at: string;
+      status_label: string | null;
+      professional_name: string | null;
+      cbo: string | null;
+      unidade_id: string | null;
+    }>(
+      `SELECT
+         a.co_prontuario::text || ':' || extract(epoch FROM a.hr_inicial_agendado)::text || ':' || coalesce(a.co_lotacao_agendada::text, '') AS appointment_id,
+         a.hr_inicial_agendado AS scheduled_at,
+         sa.no_situacao_agendado AS status_label,
+         p.no_civil_profissional AS professional_name,
+         cbo.no_cbo AS cbo,
+         l.co_unidade_saude::text AS unidade_id
+       FROM public.tb_agendado a
+       INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = a.co_prontuario
+       LEFT JOIN public.tb_situacao_agendado sa ON sa.co_situacao_agendado = a.st_agendado
+       LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = a.co_lotacao_agendada
+       LEFT JOIN public.tb_prof p ON p.co_seq_prof = l.co_prof
+       LEFT JOIN public.tb_cbo cbo ON cbo.co_cbo = l.co_cbo
+       WHERE pront.co_cidadao = $1
+       ORDER BY a.hr_inicial_agendado DESC
+       LIMIT 500`,
+      [patientId],
+    );
+
     return rows.map((row) => ({
-      id: row.co_seq_atend_prof,
+      id: row.appointment_id,
       patientId,
-      professionalName: row.no_civil_profissional,
-      specialty: row.no_cbo,
-      scheduledAt: row.dt_inicio,
-      status: "completed" as const,
-      type: classifyAppointmentType(row.no_tipo_atend),
-      healthUnitId: row.co_unidade_saude,
+      professionalName: row.professional_name,
+      specialty: row.cbo,
+      scheduledAt: row.scheduled_at,
+      status: classifyAppointmentStatus(row.status_label),
+      type: classifyAppointmentType(row.cbo),
+      healthUnitId: row.unidade_id,
       sourceSystem: "esus-pec" as const,
     }));
   }
