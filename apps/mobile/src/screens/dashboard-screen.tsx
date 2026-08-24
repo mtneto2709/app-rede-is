@@ -2,7 +2,7 @@ import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } fr
 import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import type { DashboardStats } from "@rede-is/shared-types";
+import type { DashboardStats, PatientProfileSummary } from "@rede-is/shared-types";
 import type { TenantTheme } from "@rede-is/theme-tokens";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
@@ -10,6 +10,10 @@ import { toneColorAt, withAlpha } from "@/theme/tone";
 import type { MainTabParamList } from "@/navigation/root-navigator";
 
 type Feature = keyof TenantTheme["features"];
+
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? "";
+}
 
 const QUICK_ACCESS = [
   { key: "attendancesCount", label: "Atendimentos", tab: "Atendimentos", icon: "medkit-outline", feature: "atendimentos" },
@@ -38,6 +42,7 @@ const SERVICES = [
 
 export function DashboardScreen() {
   const { data: stats } = useMeQuery<DashboardStats>("dashboard");
+  const { data: profile } = useMeQuery<PatientProfileSummary>("profile");
   const theme = useTheme();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
   const styles = createStyles(theme);
@@ -53,7 +58,7 @@ export function DashboardScreen() {
             <Image source={{ uri: theme.branding.logoLightUrl }} style={styles.logo} />
             <View style={{ flex: 1 }}>
               <Text style={styles.headerSubtitle}>Bem-vindo(a)</Text>
-              <Text style={styles.headerTitle}>{theme.branding.appName}</Text>
+              <Text style={styles.headerTitle}>{profile?.name ? firstName(profile.name) : theme.branding.appName}</Text>
             </View>
             <Pressable style={styles.settingsButton} onPress={() => navigation.navigate("Perfil")}>
               <Ionicons name="settings-outline" size={20} color={theme.colors.primaryForeground} />

@@ -155,7 +155,14 @@ export class PatientsService {
       repo.getPatientCns(link.sourcePatientId),
     ]);
     await this.logRead(tenantId, userId, "patients.profile.read", ip);
-    return { name: profile?.name ?? "", cns };
+    return {
+      name: profile?.name ?? "",
+      cns,
+      cpf: profile?.cpf ?? null,
+      birthDate: profile?.birthDate ?? null,
+      phone: profile?.mobilePhones[0] ?? null,
+      email: profile?.emails[0] ?? null,
+    };
   }
 
   async getHealthSummary(tenantId: string, userId: string, ip?: string): Promise<HealthSummary> {

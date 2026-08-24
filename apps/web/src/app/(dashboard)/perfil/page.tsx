@@ -2,14 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { IdCard, Calendar, CreditCard, Phone, Mail } from "lucide-react";
+import type { PatientProfileSummary } from "@rede-is/shared-types";
 import { useAuth } from "@/lib/auth-context";
+import { useMeQuery } from "@/lib/use-me-query";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function initials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+}
+
+function formatDate(iso: string | null): string | null {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+function InfoRow({ icon: Icon, label, value }: { icon: typeof IdCard; label: string; value: string | null }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-black/5 last:border-b-0">
+      <Icon className="h-4 w-4 text-text-secondary shrink-0" />
+      <div className="min-w-0">
+        <p className="text-[11px] text-text-secondary uppercase tracking-wide">{label}</p>
+        <p className="text-sm font-medium truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { accessToken, logout } = useAuth();
   const router = useRouter();
+  const { data: profile, isLoading } = useMeQuery<PatientProfileSummary>("profile");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -37,9 +69,28 @@ export default function ProfilePage() {
       <PageHeader title="Meu Perfil" />
       <div className="px-6 space-y-4">
         <Card className="p-4">
-          <p className="text-sm text-text-secondary">
-            Seus dados cadastrais (nome, CPF, cartão SUS) vêm diretamente do Sistema IS / e-SUS PEC e não podem ser
-            editados por aqui.
+          {isLoading ? (
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-12 w-12 rounded-full" />
+              <Skeleton className="h-5 w-40" />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 pb-3">
+                <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-base font-bold shrink-0">
+                  {profile?.name ? initials(profile.name) : "?"}
+                </div>
+                <p className="text-base font-semibold">{profile?.name || "—"}</p>
+              </div>
+              <InfoRow icon={IdCard} label="CPF" value={profile?.cpf ?? null} />
+              <InfoRow icon={Calendar} label="Data de nascimento" value={formatDate(profile?.birthDate ?? null)} />
+              <InfoRow icon={CreditCard} label="Cartão Nacional de Saúde" value={profile?.cns ?? null} />
+              <InfoRow icon={Phone} label="Telefone" value={profile?.phone ?? null} />
+              <InfoRow icon={Mail} label="E-mail" value={profile?.email ?? null} />
+            </>
+          )}
+          <p className="text-xs text-text-secondary pt-3">
+            Esses dados vêm diretamente do Sistema IS / e-SUS PEC e não podem ser editados por aqui.
           </p>
         </Card>
 

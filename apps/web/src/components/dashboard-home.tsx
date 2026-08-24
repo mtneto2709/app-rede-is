@@ -16,11 +16,15 @@ import {
   Share2,
   Settings,
 } from "lucide-react";
-import type { DashboardStats } from "@rede-is/shared-types";
+import type { DashboardStats, PatientProfileSummary } from "@rede-is/shared-types";
 import type { TenantTheme } from "@rede-is/theme-tokens";
 import { useMeQuery } from "@/lib/use-me-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TONE_BG, TONE_TEXT, toneAt, type Tone } from "@/lib/tone";
+
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] ?? "";
+}
 
 interface Banner {
   title: string;
@@ -67,6 +71,7 @@ export function DashboardHome({
   features: TenantTheme["features"];
 }) {
   const { data: stats, isLoading } = useMeQuery<DashboardStats>("dashboard");
+  const { data: profile } = useMeQuery<PatientProfileSummary>("profile");
 
   const quickAccess = QUICK_ACCESS.filter((item) => item.feature === null || features[item.feature]);
   const services = SERVICES.filter((service) => features[service.feature]);
@@ -84,7 +89,7 @@ export function DashboardHome({
             />
             <div>
               <p className="text-sm opacity-90">Bem-vindo(a)</p>
-              <h1 className="text-lg font-semibold">{appName}</h1>
+              <h1 className="text-lg font-semibold">{profile?.name ? firstName(profile.name) : appName}</h1>
             </div>
           </div>
           <Link href="/perfil" className="p-2.5 rounded-full bg-white/15 hover:bg-white/25 transition-colors">

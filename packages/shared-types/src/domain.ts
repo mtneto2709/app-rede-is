@@ -154,14 +154,19 @@ export const DashboardStats = z.object({
 export type DashboardStats = z.infer<typeof DashboardStats>;
 
 /**
- * Resumo usado pra sobrepor dado real do paciente nos moldes de cartão
- * configurados pelo tenant (ver `TenantTheme.cards`) — nome sempre
- * disponível (mesma fonte do questionário de primeiro acesso); `cns` pode
- * vir `null` quando a coluna do CNS não estiver mapeada na base de origem.
+ * Dados cadastrais do paciente logado — usado no cabeçalho (nome) e na
+ * tela de perfil, e também pra sobrepor nos moldes de cartão virtual (ver
+ * `TenantTheme.cards`). `name` sempre disponível (mesma fonte do
+ * questionário de primeiro acesso); os demais campos vêm `null` quando a
+ * base de origem não tiver o dado ou a coluna não estiver mapeada.
  */
 export const PatientProfileSummary = z.object({
   name: z.string(),
   cns: z.string().nullable(),
+  cpf: z.string().nullable(),
+  birthDate: z.string().nullable(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
 });
 export type PatientProfileSummary = z.infer<typeof PatientProfileSummary>;
 
