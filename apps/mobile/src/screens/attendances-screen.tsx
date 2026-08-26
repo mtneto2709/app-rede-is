@@ -57,7 +57,31 @@ export function AttendancesScreen() {
               {new Date(item.occurredAt).toLocaleDateString("pt-BR")}
             </Text>
           </View>
-          {item.diagnosis && (
+          {(item.typeLabel || item.healthUnitName) && (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+              {item.typeLabel && (
+                <View
+                  style={{
+                    backgroundColor: withAlpha(theme.colors.secondary, "1A"),
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: theme.colors.secondary }}>
+                    {item.typeLabel}
+                  </Text>
+                </View>
+              )}
+              {item.healthUnitName && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Ionicons name="location-outline" size={12} color={theme.colors.textSecondary} />
+                  <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{item.healthUnitName}</Text>
+                </View>
+              )}
+            </View>
+          )}
+          {(item.ciap2 || item.diagnosis) && (
             <View
               style={{
                 flexDirection: "row",
@@ -68,10 +92,20 @@ export function AttendancesScreen() {
               }}
             >
               <Ionicons name="medical-outline" size={16} color={theme.colors.secondary} style={{ marginTop: 1 }} />
-              <Text style={{ fontSize: 12, flex: 1, color: theme.colors.textPrimary }}>
-                <Text style={{ fontWeight: "700" }}>Diagnóstico: </Text>
-                {item.diagnosis}
-              </Text>
+              <View style={{ flex: 1, gap: 2 }}>
+                {item.ciap2 && (
+                  <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>
+                    <Text style={{ fontWeight: "700" }}>CIAP2: </Text>
+                    {item.ciap2}
+                  </Text>
+                )}
+                {item.diagnosis && (
+                  <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>
+                    <Text style={{ fontWeight: "700" }}>CID10: </Text>
+                    {item.diagnosis}
+                  </Text>
+                )}
+              </View>
             </View>
           )}
           {item.prescription && (

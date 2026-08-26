@@ -88,8 +88,15 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
       specialty: row.especialidade,
       occurredAt: row.dataentrada,
       diagnosis: null,
+      ciap2: null,
       prescription: null,
       healthUnitId: row.fkunidadesaude,
+      // TODO(db-mapping): `sotech.cdg_unidadesaude` está confirmada como
+      // existente (usada em cdg_paciente/cdg_contato), mas eu não tenho as
+      // colunas de nome/PK dela ainda — sem isso não dá pra resolver
+      // fkunidadesaude num nome pra mostrar no card.
+      healthUnitName: null,
+      typeLabel: row.tipoatendimento,
       type: classifyAttendanceType(row.tipoatendimento),
       sourceSystem: "sistema-is" as const,
     }));

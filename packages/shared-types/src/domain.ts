@@ -66,8 +66,14 @@ export const Attendance = z.object({
   specialty: z.string().nullable(),
   occurredAt: z.string(),
   diagnosis: z.string().nullable(),
+  /** Código/descrição CIAP2 da avaliação, quando a base tiver essa classificação separada do CID-10 (ver `diagnosis`). */
+  ciap2: z.string().nullable(),
   prescription: z.string().nullable(),
   healthUnitId: z.string().nullable(),
+  /** Nome da unidade de saúde, já resolvido — evita o app ter que cruzar `healthUnitId` com a lista de unidades só pra mostrar isso no card. */
+  healthUnitName: z.string().nullable(),
+  /** Texto original do tipo de atendimento na base de origem (ex. "Consulta programada / Cuidado continuado") — `type` é a versão reduzida em 3 categorias, isso aqui é o rótulo completo pra exibir. */
+  typeLabel: z.string().nullable(),
   type: z.enum(["consultation", "emergency", "routine"]),
   sourceSystem: SourceSystem,
 });

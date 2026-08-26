@@ -137,8 +137,11 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * `getIdentityProfile`) — `tb_atend` (encontro) + `tb_atend_prof` (um
    * profissional dentro do encontro; a granularidade usada aqui, igual à
    * query original) + `tb_prontuario` (liga ao `co_cidadao`) + CID via
-   * `rl_evolucao_avaliacao_ciap_cid`/`tb_cid10`. `prescription` fica null —
-   * não há, na referência disponível, uma tabela de prescrição mapeada.
+   * `rl_evolucao_avaliacao_ciap_cid`/`tb_cid10` + `tb_unidade_saude` (nome
+   * da unidade, mesma tabela já confirmada em `findHealthUnits`).
+   * `prescription` fica null — não há, na referência disponível, uma
+   * tabela de prescrição mapeada. CIAP2 vem de `findAttendanceRows`
+   * (isolado — ver comentário lá).
    */
   async findAttendancesByPatient(patientId: string): Promise<Attendance[]> {
     const rows = await this.findAttendanceRows(patientId);
@@ -149,8 +152,11 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       specialty: row.no_cbo,
       occurredAt: row.dt_inicio,
       diagnosis: row.cid10s && row.cid10s.length > 0 ? row.cid10s.join(", ") : null,
+      ciap2: row.ciap2s && row.ciap2s.length > 0 ? row.ciap2s.join(", ") : null,
       prescription: null,
       healthUnitId: row.co_unidade_saude,
+      healthUnitName: row.no_unidade_saude,
+      typeLabel: row.no_tipo_atend,
       type: classifyAttendanceType(row.no_tipo_atend),
       sourceSystem: "esus-pec" as const,
     }));
@@ -161,34 +167,71 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       co_seq_atend_prof: string;
       dt_inicio: string;
       co_unidade_saude: string | null;
+      no_unidade_saude: string | null;
       no_civil_profissional: string | null;
       no_cbo: string | null;
       no_tipo_atend: string | null;
       cid10s: string[] | null;
+      ciap2s: string[] | null;
     }[]
   > {
-    return this.pool.query(
-      `SELECT ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio, a.co_unidade_saude::text AS co_unidade_saude,
+    const baseSelect = `SELECT ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio,
+              a.co_unidade_saude::text AS co_unidade_saude, us.no_unidade_saude,
               prof.no_civil_profissional, cbo.no_cbo, ta.no_tipo_atend,
-              cid_a.cid10s
-       FROM public.tb_atend a
+              cid_a.cid10s`;
+    const baseFrom = `FROM public.tb_atend a
        INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = a.co_prontuario
        INNER JOIN public.tb_atend_prof ap ON ap.co_atend = a.co_seq_atend
        LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = ap.co_lotacao
        LEFT JOIN public.tb_prof prof ON prof.co_seq_prof = l.co_prof
        LEFT JOIN public.tb_cbo cbo ON cbo.co_cbo = l.co_cbo
        LEFT JOIN public.tb_tipo_atend ta ON ap.tp_atend_prof = ta.co_tipo_atend
+       LEFT JOIN public.tb_unidade_saude us ON us.co_seq_unidade_saude = a.co_unidade_saude
        LEFT JOIN LATERAL (
          SELECT array_agg(DISTINCT cid.no_cid10::text) AS cid10s
          FROM public.rl_evolucao_avaliacao_ciap_cid r
          INNER JOIN public.tb_cid10 cid ON cid.co_cid10 = r.co_cid10
          WHERE r.co_atend_prof = ap.co_seq_atend_prof
-       ) cid_a ON true
-       WHERE pront.co_cidadao = $1
+       ) cid_a ON true`;
+    const tail = `WHERE pront.co_cidadao = $1
        ORDER BY ap.dt_inicio DESC NULLS LAST
-       LIMIT 200`,
-      [patientId],
-    );
+       LIMIT 200`;
+
+    try {
+      // ATENÇÃO(coluna não confirmada): `tb_ciap`/`co_ciap` são um palpite
+      // — `rl_evolucao_avaliacao_ciap_cid` (nome real, já confirmado pelo
+      // uso do CID10 acima) sugere fortemente que carrega os dois códigos
+      // na mesma linha, mas nunca vi o nome exato da coluna CIAP2 nem da
+      // tabela de domínio. Tenta a versão enriquecida primeiro; se o nome
+      // estiver errado, cai pra query original (sem CIAP2) no catch abaixo
+      // — nunca quebra a tela de Atendimentos por causa disso.
+      return await this.pool.query(
+        `${baseSelect}, ciap_a.ciap2s
+         ${baseFrom}
+         LEFT JOIN LATERAL (
+           SELECT array_agg(DISTINCT ciap.no_ciap::text) AS ciap2s
+           FROM public.rl_evolucao_avaliacao_ciap_cid r
+           INNER JOIN public.tb_ciap ciap ON ciap.co_ciap = r.co_ciap
+           WHERE r.co_atend_prof = ap.co_seq_atend_prof
+         ) ciap_a ON true
+         ${tail}`,
+        [patientId],
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar CIAP2 (tb_ciap, coluna não confirmada) — seguindo sem CIAP2: ${message}`);
+      const rows = await this.pool.query<{
+        co_seq_atend_prof: string;
+        dt_inicio: string;
+        co_unidade_saude: string | null;
+        no_unidade_saude: string | null;
+        no_civil_profissional: string | null;
+        no_cbo: string | null;
+        no_tipo_atend: string | null;
+        cid10s: string[] | null;
+      }>(`${baseSelect} ${baseFrom} ${tail}`, [patientId]);
+      return rows.map((row) => ({ ...row, ciap2s: null }));
+    }
   }
 
   /**
