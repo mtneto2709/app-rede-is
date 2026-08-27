@@ -6,6 +6,7 @@ import { ReadOnlyPool } from "../../../common/database/read-only-pool";
 import {
   classifyAppointmentStatus,
   classifyAppointmentType,
+  classifyAttendanceCategory,
   classifyAttendanceType,
 } from "../../../common/utils/attendance-classification";
 import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
@@ -138,10 +139,11 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * profissional dentro do encontro; a granularidade usada aqui, igual à
    * query original) + `tb_prontuario` (liga ao `co_cidadao`) + CID via
    * `rl_evolucao_avaliacao_ciap_cid`/`tb_cid10` + `tb_unidade_saude` (nome
-   * da unidade, mesma tabela já confirmada em `findHealthUnits`).
-   * `prescription` fica null — não há, na referência disponível, uma
-   * tabela de prescrição mapeada. CIAP2 vem de `findAttendanceRows`
-   * (isolado — ver comentário lá).
+   * da unidade, mesma tabela já confirmada em `findHealthUnits`). Tipo de
+   * atendimento profissional (`tp_atend_prof` → `tb_tipo_atend_prof`,
+   * relação confirmada pelo cliente) e CIAP2 vêm de `findAttendanceRows`
+   * (isolados — ver comentário lá). `prescription` fica null — não há, na
+   * referência disponível, uma tabela de prescrição mapeada.
    */
   async findAttendancesByPatient(patientId: string): Promise<Attendance[]> {
     const rows = await this.findAttendanceRows(patientId);
@@ -156,12 +158,27 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       prescription: null,
       healthUnitId: row.co_unidade_saude,
       healthUnitName: row.no_unidade_saude,
-      typeLabel: row.no_tipo_atend,
-      type: classifyAttendanceType(row.no_tipo_atend),
+      typeLabel: row.no_tipo_atend_prof,
+      category: classifyAttendanceCategory(row.no_tipo_atend_prof),
+      type: classifyAttendanceType(row.no_tipo_atend_prof),
       sourceSystem: "esus-pec" as const,
     }));
   }
 
+  /**
+   * Três tentativas em cascata, da mais completa pra mais segura — cada
+   * uma isolada por try/catch, nunca deixando a tela de Atendimentos
+   * quebrar por causa de uma coluna não confirmada:
+   *  1. tipo de atendimento profissional (`tb_tipo_atend_prof`) + CIAP2 (`tb_ciap`)
+   *  2. só tipo de atendimento profissional (sem CIAP2)
+   *  3. nem um nem outro (o que já era confirmado antes desta mudança)
+   * `tb_atend_prof.tp_atend_prof` → `tb_tipo_atend_prof` é a relação que o
+   * cliente confirmou; `co_tipo_atend_prof`/`no_tipo_atend_prof` seguem o
+   * padrão de nome já confirmado repetidas vezes nesta base
+   * (`co_seq_<tabela>`/`no_<tabela>`), mas nunca vi o nome exato dessas
+   * colunas específicas. `tb_ciap`/`co_ciap` continuam sendo o palpite de
+   * menor confiança (só a tabela de relação é confirmada, não a coluna).
+   */
   private async findAttendanceRows(patientId: string): Promise<
     {
       co_seq_atend_prof: string;
@@ -170,14 +187,14 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       no_unidade_saude: string | null;
       no_civil_profissional: string | null;
       no_cbo: string | null;
-      no_tipo_atend: string | null;
+      no_tipo_atend_prof: string | null;
       cid10s: string[] | null;
       ciap2s: string[] | null;
     }[]
   > {
     const baseSelect = `SELECT ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio,
               a.co_unidade_saude::text AS co_unidade_saude, us.no_unidade_saude,
-              prof.no_civil_profissional, cbo.no_cbo, ta.no_tipo_atend,
+              prof.no_civil_profissional, cbo.no_cbo,
               cid_a.cid10s`;
     const baseFrom = `FROM public.tb_atend a
        INNER JOIN public.tb_prontuario pront ON pront.co_seq_prontuario = a.co_prontuario
@@ -185,7 +202,6 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
        LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = ap.co_lotacao
        LEFT JOIN public.tb_prof prof ON prof.co_seq_prof = l.co_prof
        LEFT JOIN public.tb_cbo cbo ON cbo.co_cbo = l.co_cbo
-       LEFT JOIN public.tb_tipo_atend ta ON ap.tp_atend_prof = ta.co_tipo_atend
        LEFT JOIN public.tb_unidade_saude us ON us.co_seq_unidade_saude = a.co_unidade_saude
        LEFT JOIN LATERAL (
          SELECT array_agg(DISTINCT cid.no_cid10::text) AS cid10s
@@ -196,30 +212,25 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     const tail = `WHERE pront.co_cidadao = $1
        ORDER BY ap.dt_inicio DESC NULLS LAST
        LIMIT 200`;
+    const tipoJoin = `LEFT JOIN public.tb_tipo_atend_prof ta ON ta.co_tipo_atend_prof = ap.tp_atend_prof`;
+    const ciapJoin = `LEFT JOIN LATERAL (
+         SELECT array_agg(DISTINCT ciap.no_ciap::text) AS ciap2s
+         FROM public.rl_evolucao_avaliacao_ciap_cid r
+         INNER JOIN public.tb_ciap ciap ON ciap.co_ciap = r.co_ciap
+         WHERE r.co_atend_prof = ap.co_seq_atend_prof
+       ) ciap_a ON true`;
 
     try {
-      // ATENÇÃO(coluna não confirmada): `tb_ciap`/`co_ciap` são um palpite
-      // — `rl_evolucao_avaliacao_ciap_cid` (nome real, já confirmado pelo
-      // uso do CID10 acima) sugere fortemente que carrega os dois códigos
-      // na mesma linha, mas nunca vi o nome exato da coluna CIAP2 nem da
-      // tabela de domínio. Tenta a versão enriquecida primeiro; se o nome
-      // estiver errado, cai pra query original (sem CIAP2) no catch abaixo
-      // — nunca quebra a tela de Atendimentos por causa disso.
       return await this.pool.query(
-        `${baseSelect}, ciap_a.ciap2s
-         ${baseFrom}
-         LEFT JOIN LATERAL (
-           SELECT array_agg(DISTINCT ciap.no_ciap::text) AS ciap2s
-           FROM public.rl_evolucao_avaliacao_ciap_cid r
-           INNER JOIN public.tb_ciap ciap ON ciap.co_ciap = r.co_ciap
-           WHERE r.co_atend_prof = ap.co_seq_atend_prof
-         ) ciap_a ON true
-         ${tail}`,
+        `${baseSelect}, ta.no_tipo_atend_prof, ciap_a.ciap2s ${baseFrom} ${tipoJoin} ${ciapJoin} ${tail}`,
         [patientId],
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar CIAP2 (tb_ciap, coluna não confirmada) — seguindo sem CIAP2: ${message}`);
+      this.logger.warn(`Falha ao buscar tipo+CIAP2 juntos — tentando só o tipo de atendimento: ${message}`);
+    }
+
+    try {
       const rows = await this.pool.query<{
         co_seq_atend_prof: string;
         dt_inicio: string;
@@ -227,11 +238,27 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         no_unidade_saude: string | null;
         no_civil_profissional: string | null;
         no_cbo: string | null;
-        no_tipo_atend: string | null;
+        no_tipo_atend_prof: string | null;
         cid10s: string[] | null;
-      }>(`${baseSelect} ${baseFrom} ${tail}`, [patientId]);
+      }>(`${baseSelect}, ta.no_tipo_atend_prof ${baseFrom} ${tipoJoin} ${tail}`, [patientId]);
       return rows.map((row) => ({ ...row, ciap2s: null }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `Falha ao buscar tipo de atendimento profissional (tb_tipo_atend_prof, coluna não confirmada) — seguindo sem tipo nem CIAP2: ${message}`,
+      );
     }
+
+    const rows = await this.pool.query<{
+      co_seq_atend_prof: string;
+      dt_inicio: string;
+      co_unidade_saude: string | null;
+      no_unidade_saude: string | null;
+      no_civil_profissional: string | null;
+      no_cbo: string | null;
+      cid10s: string[] | null;
+    }>(`${baseSelect} ${baseFrom} ${tail}`, [patientId]);
+    return rows.map((row) => ({ ...row, no_tipo_atend_prof: null, ciap2s: null }));
   }
 
   /**

@@ -1,3 +1,5 @@
+import type { AttendanceCategory } from "@rede-is/shared-types";
+
 /**
  * Nenhuma das duas bases (e-SUS PEC / Sistema IS) tem uma coluna que já
  * venha pronta como "consultation" | "emergency" | "routine" (Attendance)
@@ -38,4 +40,27 @@ export function classifyAppointmentStatus(label: string | null): "scheduled" | "
   if (/falt|n[aã]o compare|ausente/.test(normalized)) return "missed";
   if (/atendid|realizad|finalizad|compareceu|presente/.test(normalized)) return "completed";
   return "scheduled";
+}
+
+/**
+ * Categoria visual de um atendimento (ícone + cor do card) a partir do
+ * texto de tipo de atendimento profissional (`tb_tipo_atend_prof.no_tipo_atend_prof`
+ * no e-SUS, `tipoatendimento` no Sistema IS) — mesma técnica de
+ * palavra-chave dos outros classificadores. Fallback pra "other" (ícone e
+ * cor genéricos) quando nada bate ou o texto vem nulo.
+ */
+export function classifyAttendanceCategory(label: string | null): AttendanceCategory {
+  if (!label) return "other";
+  const normalized = label.toLowerCase();
+  if (/pr[eé].?natal|gestante/.test(normalized)) return "prenatal";
+  if (/domiciliar|territorial/.test(normalized)) return "homeVisit";
+  if (/vacin|imuniza/.test(normalized)) return "vaccination";
+  if (/odont/.test(normalized)) return "dental";
+  if (/puericultura|crian[çc]a/.test(normalized)) return "childCare";
+  if (/exame|laborat|radiolog/.test(normalized)) return "exam";
+  if (/curativ/.test(normalized)) return "dressing";
+  if (/grupo|coletiv/.test(normalized)) return "group";
+  if (/procediment|cirurg/.test(normalized)) return "procedure";
+  if (/consulta/.test(normalized)) return "consultation";
+  return "other";
 }

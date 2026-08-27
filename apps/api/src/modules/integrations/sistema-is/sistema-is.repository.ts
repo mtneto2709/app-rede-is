@@ -3,7 +3,11 @@ import { getSistemaIsConnectionConfig, type Env } from "@rede-is/config";
 import type { Appointment, Attendance, Document, HealthUnit, Patient } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
-import { classifyAppointmentType, classifyAttendanceType } from "../../../common/utils/attendance-classification";
+import {
+  classifyAppointmentType,
+  classifyAttendanceCategory,
+  classifyAttendanceType,
+} from "../../../common/utils/attendance-classification";
 import type {
   HealthSummaryResult,
   IdentityCandidate,
@@ -97,6 +101,7 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
       // fkunidadesaude num nome pra mostrar no card.
       healthUnitName: null,
       typeLabel: row.tipoatendimento,
+      category: classifyAttendanceCategory(row.tipoatendimento),
       type: classifyAttendanceType(row.tipoatendimento),
       sourceSystem: "sistema-is" as const,
     }));

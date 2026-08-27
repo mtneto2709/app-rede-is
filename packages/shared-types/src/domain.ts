@@ -59,6 +59,29 @@ export const Appointment = z.object({
 });
 export type Appointment = z.infer<typeof Appointment>;
 
+/**
+ * Categoria visual do atendimento (ícone + cor do card), derivada por
+ * palavra-chave do `typeLabel` — mesma técnica dos outros classificadores
+ * desta base (nenhuma das duas bases tem uma coluna fechada em enum pra
+ * isso). Cada app mapeia a categoria pro próprio ícone (lucide no web,
+ * Ionicons no mobile); a classificação em si mora só aqui pra não
+ * duplicar a lista de palavras-chave em três lugares.
+ */
+export const AttendanceCategory = z.enum([
+  "consultation",
+  "procedure",
+  "homeVisit",
+  "prenatal",
+  "vaccination",
+  "dental",
+  "childCare",
+  "exam",
+  "dressing",
+  "group",
+  "other",
+]);
+export type AttendanceCategory = z.infer<typeof AttendanceCategory>;
+
 export const Attendance = z.object({
   id: z.string(),
   patientId: z.string(),
@@ -72,8 +95,9 @@ export const Attendance = z.object({
   healthUnitId: z.string().nullable(),
   /** Nome da unidade de saúde, já resolvido — evita o app ter que cruzar `healthUnitId` com a lista de unidades só pra mostrar isso no card. */
   healthUnitName: z.string().nullable(),
-  /** Texto original do tipo de atendimento na base de origem (ex. "Consulta programada / Cuidado continuado") — `type` é a versão reduzida em 3 categorias, isso aqui é o rótulo completo pra exibir. */
+  /** Texto original do tipo de atendimento profissional na base de origem (ex. "Consulta programada / Cuidado continuado", "Visita Domiciliar"). `type`/`category` são versões reduzidas, isso aqui é o rótulo completo pra exibir em destaque. */
   typeLabel: z.string().nullable(),
+  category: AttendanceCategory,
   type: z.enum(["consultation", "emergency", "routine"]),
   sourceSystem: SourceSystem,
 });
