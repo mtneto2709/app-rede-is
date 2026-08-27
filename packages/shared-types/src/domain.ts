@@ -150,15 +150,37 @@ export const VaccinationCardResponse = z.object({
 });
 export type VaccinationCardResponse = z.infer<typeof VaccinationCardResponse>;
 
+/**
+ * Conteúdo estruturado de um documento clínico (e-SUS PEC não guarda PDF
+ * pronto pra atestado/encaminhamento — o "Visualizar atestado" do sistema
+ * é montado na hora a partir desses campos). O app monta uma visualização
+ * equivalente com o que tiver disponível; campos ausentes simplesmente não
+ * aparecem na tela.
+ */
+export const DocumentContent = z.object({
+  healthUnitName: z.string().nullable(),
+  professionalName: z.string().nullable(),
+  professionalRole: z.string().nullable(),
+  cid10: z.string().nullable(),
+  /** Dias de afastamento (atestado) — null quando não se aplica ao tipo de documento. */
+  daysOff: z.number().nullable(),
+  /** Texto livre / itens do documento (lista de medicamentos da receita, motivo do encaminhamento etc). */
+  text: z.string().nullable(),
+});
+export type DocumentContent = z.infer<typeof DocumentContent>;
+
 export const Document = z.object({
   id: z.string(),
   patientId: z.string(),
   title: z.string(),
-  type: z.enum(["prescription", "exam", "certificate", "report"]),
+  type: z.enum(["prescription", "exam", "certificate", "referral", "report"]),
   issuedAt: z.string(),
   professionalName: z.string().nullable(),
   description: z.string().nullable(),
+  /** URL de um arquivo já pronto (quando a base guardar um PDF/anexo) — a maioria dos documentos do e-SUS não tem isso, ver `content`. */
   fileUrl: z.string().nullable(),
+  /** Campos estruturados pra montar uma visualização quando não há `fileUrl`. */
+  content: DocumentContent.nullable(),
   sourceSystem: SourceSystem,
 });
 export type Document = z.infer<typeof Document>;
@@ -208,6 +230,8 @@ export type PatientProfileSummary = z.infer<typeof PatientProfileSummary>;
 export const HealthCondition = z.object({
   id: z.string(),
   label: z.string(),
+  /** Data de início do problema/condição, quando a base tiver essa data registrada. */
+  startedAt: z.string().nullable(),
 });
 export type HealthCondition = z.infer<typeof HealthCondition>;
 
@@ -227,17 +251,40 @@ export const ExamResult = z.object({
 });
 export type ExamResult = z.infer<typeof ExamResult>;
 
+export const AllergyEntry = z.object({
+  id: z.string(),
+  label: z.string(),
+});
+export type AllergyEntry = z.infer<typeof AllergyEntry>;
+
+/** Últimas medições/sinais vitais registrados num atendimento — `measuredAt` null quando nenhuma medição foi encontrada (o objeto todo vem `null` nesse caso, ver `HealthSummary.measurements`). */
+export const VitalMeasurements = z.object({
+  measuredAt: z.string().nullable(),
+  weightKg: z.number().nullable(),
+  heightCm: z.number().nullable(),
+  bloodPressureSystolic: z.number().nullable(),
+  bloodPressureDiastolic: z.number().nullable(),
+  heartRate: z.number().nullable(),
+  temperature: z.number().nullable(),
+  oxygenSaturation: z.number().nullable(),
+  capillaryGlucose: z.number().nullable(),
+});
+export type VitalMeasurements = z.infer<typeof VitalMeasurements>;
+
 /**
  * `available: false` quando a base de origem do paciente ainda não tem
- * nenhuma dessas três informações mapeadas — cada lista, individualmente,
- * pode vir vazia mesmo com `available: true` (significa "mapeado, mas o
- * paciente não tem nenhum registro"), diferente de "não mapeado ainda".
+ * nada dessas informações mapeadas — cada lista/campo, individualmente,
+ * pode vir vazio/null mesmo com `available: true` (significa "mapeado,
+ * mas o paciente não tem nenhum registro"), diferente de "não mapeado
+ * ainda".
  */
 export const HealthSummary = z.object({
   available: z.boolean(),
   conditions: z.array(HealthCondition),
   medications: z.array(ContinuousMedication),
   exams: z.array(ExamResult),
+  allergies: z.array(AllergyEntry),
+  measurements: VitalMeasurements.nullable(),
 });
 export type HealthSummary = z.infer<typeof HealthSummary>;
 

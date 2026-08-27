@@ -1,4 +1,5 @@
 import type {
+  AllergyEntry,
   Appointment,
   Attendance,
   ContinuousMedication,
@@ -7,6 +8,7 @@ import type {
   HealthCondition,
   HealthUnit,
   Patient,
+  VitalMeasurements,
 } from "@rede-is/shared-types";
 
 /** Resultado resumido de uma busca por contato — usado para desambiguar quando o mesmo telefone/e-mail está em mais de um cadastro. */
@@ -42,6 +44,8 @@ export interface HealthSummaryResult {
   conditions: HealthCondition[];
   medications: ContinuousMedication[];
   exams: ExamResult[];
+  allergies: AllergyEntry[];
+  measurements: VitalMeasurements | null;
 }
 
 /**

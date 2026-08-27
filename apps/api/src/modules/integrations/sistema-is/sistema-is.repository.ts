@@ -268,7 +268,7 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
    * information_schema.columns).
    */
   async getHealthSummary(_sourcePatientId: string): Promise<HealthSummaryResult> {
-    return { available: false, conditions: [], medications: [], exams: [] };
+    return { available: false, conditions: [], medications: [], exams: [], allergies: [], measurements: null };
   }
 
   async onModuleDestroy() {
