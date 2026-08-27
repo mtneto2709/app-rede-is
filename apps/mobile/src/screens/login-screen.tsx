@@ -1,5 +1,16 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, Image, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+} from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useTheme } from "@/theme/theme-provider";
 import { useAuth } from "@/lib/auth-context";
@@ -55,65 +66,68 @@ export function LoginScreen({ navigation }: Props) {
   const styles = createStyles(theme);
 
   return (
-    <View style={styles.container}>
-      <Image source={{ uri: theme.branding.logoLightUrl }} style={styles.logo} resizeMode="contain" />
-      <Text style={styles.title}>{theme.branding.appName}</Text>
-      <Text style={styles.subtitle}>Acesse seus atendimentos, agendamentos e documentos de saúde.</Text>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Image source={{ uri: theme.branding.logoLightUrl }} style={styles.logo} resizeMode="contain" />
+        <Text style={styles.title}>{theme.branding.appName}</Text>
+        <Text style={styles.subtitle}>Acesse seus atendimentos, agendamentos e documentos de saúde.</Text>
 
-      {step === "contact" ? (
-        <>
-          {theme.auth.otpChannels.length > 1 && (
-            <View style={styles.channelRow}>
-              {theme.auth.otpChannels.map((c) => (
-                <Pressable
-                  key={c}
-                  onPress={() => setChannel(c)}
-                  style={[styles.channelButton, channel === c && styles.channelButtonActive]}
-                >
-                  <Text style={channel === c ? styles.channelTextActive : styles.channelText}>{CHANNEL_LABEL[c]}</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-          <TextInput
-            style={styles.input}
-            placeholder={channel === "email" ? "seuemail@exemplo.com" : "(00) 00000-0000"}
-            keyboardType={channel === "email" ? "email-address" : "phone-pad"}
-            value={contact}
-            onChangeText={setContact}
-            autoCapitalize="none"
-          />
-          {error && <Text style={styles.error}>{error}</Text>}
-          <Pressable style={styles.button} onPress={handleRequestCode} disabled={isSubmitting}>
-            {isSubmitting ? <ActivityIndicator color={theme.colors.primaryForeground} /> : <Text style={styles.buttonText}>Enviar código</Text>}
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <Text style={styles.subtitle}>Digite o código enviado para {contact}.</Text>
-          <TextInput
-            style={[styles.input, styles.codeInput]}
-            placeholder="000000"
-            keyboardType="number-pad"
-            value={code}
-            onChangeText={setCode}
-          />
-          {error && <Text style={styles.error}>{error}</Text>}
-          <Pressable style={styles.button} onPress={handleVerifyCode} disabled={isSubmitting}>
-            {isSubmitting ? <ActivityIndicator color={theme.colors.primaryForeground} /> : <Text style={styles.buttonText}>Confirmar</Text>}
-          </Pressable>
-          <Pressable onPress={() => setStep("contact")}>
-            <Text style={styles.linkText}>Usar outro contato</Text>
-          </Pressable>
-        </>
-      )}
-    </View>
+        {step === "contact" ? (
+          <>
+            {theme.auth.otpChannels.length > 1 && (
+              <View style={styles.channelRow}>
+                {theme.auth.otpChannels.map((c) => (
+                  <Pressable
+                    key={c}
+                    onPress={() => setChannel(c)}
+                    style={[styles.channelButton, channel === c && styles.channelButtonActive]}
+                  >
+                    <Text style={channel === c ? styles.channelTextActive : styles.channelText}>{CHANNEL_LABEL[c]}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            <TextInput
+              style={styles.input}
+              placeholder={channel === "email" ? "seuemail@exemplo.com" : "(00) 00000-0000"}
+              keyboardType={channel === "email" ? "email-address" : "phone-pad"}
+              value={contact}
+              onChangeText={setContact}
+              autoCapitalize="none"
+            />
+            {error && <Text style={styles.error}>{error}</Text>}
+            <Pressable style={styles.button} onPress={handleRequestCode} disabled={isSubmitting}>
+              {isSubmitting ? <ActivityIndicator color={theme.colors.primaryForeground} /> : <Text style={styles.buttonText}>Enviar código</Text>}
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.subtitle}>Digite o código enviado para {contact}.</Text>
+            <TextInput
+              style={[styles.input, styles.codeInput]}
+              placeholder="000000"
+              keyboardType="number-pad"
+              value={code}
+              onChangeText={setCode}
+            />
+            {error && <Text style={styles.error}>{error}</Text>}
+            <Pressable style={styles.button} onPress={handleVerifyCode} disabled={isSubmitting}>
+              {isSubmitting ? <ActivityIndicator color={theme.colors.primaryForeground} /> : <Text style={styles.buttonText}>Confirmar</Text>}
+            </Pressable>
+            <Pressable onPress={() => setStep("contact")}>
+              <Text style={styles.linkText}>Usar outro contato</Text>
+            </Pressable>
+          </>
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 function createStyles(theme: ReturnType<typeof useTheme>) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background, padding: 24, justifyContent: "center", gap: 12 },
+    flex: { flex: 1, backgroundColor: theme.colors.background },
+    container: { flexGrow: 1, padding: 24, justifyContent: "center", gap: 12 },
     logo: { height: 56, alignSelf: "center", marginBottom: 8 },
     title: { fontSize: 20, fontWeight: "600", textAlign: "center", color: theme.colors.textPrimary },
     subtitle: { fontSize: 13, textAlign: "center", color: theme.colors.textSecondary, marginBottom: 8 },

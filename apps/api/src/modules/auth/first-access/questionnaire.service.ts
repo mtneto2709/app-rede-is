@@ -390,7 +390,12 @@ export class QuestionnaireService {
     };
   }
 
-  async submit(userId: string, attemptId: string, answers: { questionId: string; optionId: string }[]): Promise<{ passed: boolean }> {
+  async submit(
+    userId: string,
+    tenantId: string,
+    attemptId: string,
+    answers: { questionId: string; optionId: string }[],
+  ): Promise<{ passed: boolean }> {
     const attempt = await this.prisma.questionnaireAttempt.findUnique({ where: { id: attemptId } });
     if (!attempt || attempt.userId !== userId) {
       throw new UnauthorizedException("Tentativa de validação inválida");
@@ -420,13 +425,15 @@ export class QuestionnaireService {
     if (passed && attempt.sourceSystem && attempt.sourcePatientId) {
       // upsert (não create): reenviar o mesmo attempt (ex.: retry de rede)
       // não pode virar erro. O que precisa virar erro claro é o OUTRO
-      // unique ([sourceSystem, sourcePatientId]) — esse mesmo cadastro já
-      // vinculado a uma conta diferente — capturado abaixo em vez de
-      // deixar subir como 500 genérico (Prisma P2002).
+      // unique ([tenantId, sourceSystem, sourcePatientId]) — esse mesmo
+      // cadastro já vinculado a uma conta diferente DENTRO DO MESMO
+      // cliente — capturado abaixo em vez de deixar subir como 500
+      // genérico (Prisma P2002). tenantId entra na chave pra não colidir
+      // entre clientes diferentes (ver comentário no schema.prisma).
       await this.prisma.patientLink
         .upsert({
           where: { userId },
-          create: { userId, sourceSystem: attempt.sourceSystem, sourcePatientId: attempt.sourcePatientId },
+          create: { userId, tenantId, sourceSystem: attempt.sourceSystem, sourcePatientId: attempt.sourcePatientId },
           update: { sourceSystem: attempt.sourceSystem, sourcePatientId: attempt.sourcePatientId },
         })
         .catch((err) => {

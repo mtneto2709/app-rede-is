@@ -37,6 +37,7 @@ model Tenant {
 
   users               PlatformUser[]
   auditLogEntries     AuditLogEntry[]
+  patientLinks        PatientLink[]
 }
 
 model PlatformUser {
@@ -74,15 +75,24 @@ model UserIdentity {
 
 /// Vínculo entre o usuário da plataforma e o registro de paciente nas bases
 /// legadas. Guarda apenas identificadores, nunca dado clínico.
+///
+/// `sourcePatientId` só é único DENTRO da base de um cliente — dois clientes
+/// diferentes (dois `tenantId`) podem, por coincidência, ter um cidadão com o
+/// mesmo `co_seq_cidadao`/id numérico em seus respectivos Sistema IS/e-SUS,
+/// sem serem a mesma pessoa. Por isso a unicidade é composta com `tenantId`
+/// (não só `[sourceSystem, sourcePatientId]`, que bloquearia cadastros
+/// legítimos entre clientes diferentes).
 model PatientLink {
   id             String   @id @default(cuid())
+  tenant         Tenant       @relation(fields: [tenantId], references: [id])
+  tenantId       String
   user           PlatformUser @relation(fields: [userId], references: [id])
   userId         String       @unique
   sourceSystem   String       // "sistema-is" | "esus-pec"
   sourcePatientId String
   linkedAt       DateTime     @default(now())
 
-  @@unique([sourceSystem, sourcePatientId])
+  @@unique([tenantId, sourceSystem, sourcePatientId])
 }
 
 model OtpCode {

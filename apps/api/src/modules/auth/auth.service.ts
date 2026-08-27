@@ -115,7 +115,7 @@ export class AuthService {
 
   async submitQuestionnaire(firstAccessToken: string, dto: SubmitQuestionnaireDto, ip?: string): Promise<LoginResult> {
     const payload = this.tokens.verifyFirstAccessToken(firstAccessToken);
-    const { passed } = await this.questionnaire.submit(payload.sub, dto.attemptId, dto.answers);
+    const { passed } = await this.questionnaire.submit(payload.sub, payload.tenantId, dto.attemptId, dto.answers);
 
     if (!passed) {
       await this.audit.record({ tenantId: payload.tenantId, userId: payload.sub, action: "auth.first_access.failed", ipAddress: ip });
