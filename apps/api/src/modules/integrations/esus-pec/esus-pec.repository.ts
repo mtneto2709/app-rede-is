@@ -272,9 +272,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * ATENÇÃO(palpite não confirmado, sem nenhuma evidência de schema real —
-   * ver ATENÇÃO em `getHealthSummary` pro nível de confiança de cada
-   * fonte). O e-SUS PEC não guarda um PDF pronto por documento — a tela
+   * O e-SUS PEC não guarda um PDF pronto por documento — a tela
    * "Visualizar atestado" do sistema monta o texto na hora a partir de
    * dados estruturados (unidade, profissional, CID10, dias de
    * afastamento). Por isso `Document.content` carrega esses campos, não
@@ -282,15 +280,16 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    *
    * Três fontes independentes, cada uma isolada com try/catch, mescladas e
    * ordenadas por data (mais recente primeiro):
-   *  - Atestados: `tb_atestado` (nome sem nenhuma pista, nem do CDS/RAS
-   *    nem do cliente — atestado não é dado exportado nacionalmente).
-   *  - Receitas: reaproveita `tb_prescricao_medicamento` (usada em
-   *    `getMedicationsInUse`) agrupada por atendimento — um "documento"
-   *    por atendimento que gerou pelo menos uma prescrição.
-   *  - Encaminhamentos: `tb_encaminhamento_externo` — nome de tabela com
-   *    alguma base (`EncaminhamentoExternoThrift` existe no formato
-   *    oficial CDS/RAS, confirmando o CONCEITO, mas o nome Postgres em si
-   *    é chute).
+   *  - Atestados: CONFIRMADO via DDL — `tb_atestado`.
+   *  - Receitas: CONFIRMADO via DDL — `tb_receita_medicamento` (não mais
+   *    o palpite antigo `tb_prescricao_medicamento`, que não existe),
+   *    agrupada por atendimento — um "documento" por atendimento que
+   *    gerou pelo menos uma prescrição.
+   *  - Encaminhamentos: `tb_encaminhamento_externo` — ainda sem DDL
+   *    confirmado (nenhum client forneceu essa tabela até agora); nome de
+   *    tabela com alguma base conceitual (`EncaminhamentoExternoThrift`
+   *    existe no formato oficial CDS/RAS), mas o nome Postgres em si
+   *    continua sendo chute.
    */
   async findDocumentsByPatient(patientId: string): Promise<Document[]> {
     const [certificates, prescriptions, referrals] = await Promise.all([
@@ -313,53 +312,80 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
        LEFT JOIN public.tb_cbo cbo ON cbo.co_cbo = l.co_cbo
        LEFT JOIN public.tb_unidade_saude us ON us.co_seq_unidade_saude = a.co_unidade_saude`;
 
+  /**
+   * CONFIRMADO via DDL: `tb_atestado`. `co_atend_prof` e `co_prontuario`
+   * são ambos opcionais na tabela (nenhum `not null`) — usamos
+   * `co_prontuario` (link direto e mais confiável) pra achar o cidadão, e
+   * LEFT JOIN em `tb_atend_prof` só pra enriquecer com profissional/unidade
+   * quando existir. Coluna de dias é `nu_dias` (não `nu_dias_afastamento`
+   * como eu tinha chutado antes), e a data de início do afastamento é
+   * `dt_afastamento`, direto na tabela — usada como `issuedAt` quando não
+   * há atendimento vinculado.
+   */
   private async findCertificateDocuments(patientId: string): Promise<Document[]> {
     try {
       const rows = await this.pool.query<{
         co_seq_atestado: string;
-        nu_dias_afastamento: number | null;
+        nu_dias: number | null;
         ds_atestado: string | null;
+        dt_afastamento: string | null;
         no_cid10: string | null;
-        dt_inicio: string;
+        atend_at: string | null;
         no_civil_profissional: string | null;
         no_cbo: string | null;
         no_unidade_saude: string | null;
       }>(
-        `SELECT at.co_seq_atestado::text AS co_seq_atestado, at.nu_dias_afastamento, at.ds_atestado, cid.no_cid10,
-                ap.dt_inicio, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude
+        `SELECT at.co_seq_atestado::text AS co_seq_atestado, at.nu_dias, at.ds_atestado, at.dt_afastamento, cid.no_cid10,
+                ap.dt_inicio AS atend_at, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude
          FROM public.tb_atestado at
-         ${this.atendProfContextJoin.replace("{{FK}}", "at.co_atend_prof")}
+         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = at.co_prontuario
+         LEFT JOIN public.tb_atend_prof ap ON ap.co_seq_atend_prof = at.co_atend_prof
+         LEFT JOIN public.tb_atend a ON a.co_seq_atend = ap.co_atend
+         LEFT JOIN public.tb_lotacao l ON l.co_ator_papel = ap.co_lotacao
+         LEFT JOIN public.tb_prof prof ON prof.co_seq_prof = l.co_prof
+         LEFT JOIN public.tb_cbo cbo ON cbo.co_cbo = l.co_cbo
+         LEFT JOIN public.tb_unidade_saude us ON us.co_seq_unidade_saude = a.co_unidade_saude
          LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = at.co_cid10
          WHERE p.co_cidadao = $1`,
         [patientId],
       );
 
-      return rows.map((row) => ({
-        id: `certificate:${row.co_seq_atestado}`,
-        patientId,
-        title: "Atestado Médico",
-        type: "certificate" as const,
-        issuedAt: row.dt_inicio,
-        professionalName: row.no_civil_profissional,
-        description: row.nu_dias_afastamento ? `${row.nu_dias_afastamento} dia(s) de afastamento` : row.no_cid10,
-        fileUrl: null,
-        content: {
-          healthUnitName: row.no_unidade_saude,
+      return rows
+        .filter((row) => row.atend_at || row.dt_afastamento)
+        .map((row) => ({
+          id: `certificate:${row.co_seq_atestado}`,
+          patientId,
+          title: "Atestado Médico",
+          type: "certificate" as const,
+          issuedAt: (row.atend_at ?? row.dt_afastamento) as string,
           professionalName: row.no_civil_profissional,
-          professionalRole: row.no_cbo,
-          cid10: row.no_cid10,
-          daysOff: row.nu_dias_afastamento,
-          text: row.ds_atestado,
-        },
-        sourceSystem: "esus-pec" as const,
-      }));
+          description: row.nu_dias ? `${row.nu_dias} dia(s) de afastamento` : row.no_cid10,
+          fileUrl: null,
+          content: {
+            healthUnitName: row.no_unidade_saude,
+            professionalName: row.no_civil_profissional,
+            professionalRole: row.no_cbo,
+            cid10: row.no_cid10,
+            daysOff: row.nu_dias,
+            text: row.ds_atestado,
+          },
+          sourceSystem: "esus-pec" as const,
+        }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar atestados (tb_atestado, tabela não confirmada) de ${patientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar atestados (tb_atestado) de ${patientId}: ${message}`);
       return [];
     }
   }
 
+  /**
+   * CONFIRMADO via DDL: `tb_receita_medicamento` (não a tabela
+   * `tb_prescricao_medicamento` chutada antes, que não existe), agrupada
+   * por atendimento — um "documento" por atendimento que gerou pelo menos
+   * uma prescrição. Nome do medicamento vem do catálogo `tb_medicamento`
+   * (tabela e relacionamento `co_medicamento` reais; nome da coluna de
+   * rótulo, `no_medicamento`, é chute por convenção).
+   */
   private async findPrescriptionDocuments(patientId: string): Promise<Document[]> {
     try {
       const rows = await this.pool.query<{
@@ -370,10 +396,11 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         no_cbo: string | null;
         no_unidade_saude: string | null;
       }>(
-        `SELECT ap.co_seq_atend_prof::text, array_agg(DISTINCT (pm.no_medicamento || coalesce(' — ' || pm.ds_posologia, ''))) AS itens,
+        `SELECT ap.co_seq_atend_prof::text, array_agg(DISTINCT (med.no_medicamento || coalesce(' — ' || r.no_posologia, ''))) AS itens,
                 ap.dt_inicio, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude
-         FROM public.tb_prescricao_medicamento pm
-         ${this.atendProfContextJoin.replace("{{FK}}", "pm.co_atend_prof")}
+         FROM public.tb_receita_medicamento r
+         ${this.atendProfContextJoin.replace("{{FK}}", "r.co_atend_prof")}
+         LEFT JOIN public.tb_medicamento med ON med.co_medicamento = r.co_medicamento
          WHERE p.co_cidadao = $1
          GROUP BY ap.co_seq_atend_prof, ap.dt_inicio, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude`,
         [patientId],
@@ -400,7 +427,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar receitas (tb_prescricao_medicamento, tabela não confirmada) de ${patientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar receitas (tb_receita_medicamento) de ${patientId}: ${message}`);
       return [];
     }
   }
@@ -672,26 +699,29 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * ATENÇÃO(schema não verificado contra um banco real): cada fonte abaixo
-   * roda isolada com try/catch — se um nome de tabela/coluna estiver
-   * errado, aquela fonte simplesmente não contribui nada, sem derrubar a
-   * tela inteira. Confiança por fonte:
-   *  - conditions (auto-relatadas + diagnosticadas): schema repassado pelo
-   *    cliente (tb_cds_cad_individual, tb_antecedente/tb_problema_condicao)
-   *    — mesmo nível de confiança de antes.
-   *  - measurements/medications/allergies: meu próprio palpite, baseado no
-   *    formato OFICIAL de exportação nacional do e-SUS (CDS/RAS — thrift
-   *    de `laboratoriobridge/esusaps-integracao` no GitHub, ficha
-   *    "Atendimento Individual"), que confirma que peso/altura/pressão
-   *    (`MedicoesThrift`), medicamento com flag de uso contínuo
-   *    (`MedicamentoThrift.usoContinuo`) e problema/condição são todos
-   *    capturados por atendimento (`tb_atend_prof`) — mas os nomes de
-   *    tabela/coluna no Postgres em si (`tb_medicao`, `tb_prescricao_medicamento`)
-   *    são chute meu seguindo o padrão já confirmado nesta base
-   *    (`co_seq_<tabela>`/`no_<tabela>`/`vl_<campo>`/`st_<flag>`), não
-   *    vieram de nenhuma fonte real. Alergia não aparece em nenhuma ficha
-   *    do CDS (é dado só local, nunca exportado) — é o palpite de menor
-   *    confiança de todos aqui.
+   * Confiança por fonte, depois do DDL real que o cliente passou pras
+   * tabelas de medição/alergia/atestado/uso contínuo/problema:
+   *  - conditions (auto-relatadas): ainda `tb_cds_cad_individual`, schema
+   *    repassado pelo cliente antes desta rodada — inalterado.
+   *  - conditions (diagnosticadas): CONFIRMADO via DDL — `tb_problema` +
+   *    `tb_problema_evolucao` (não mais o palpite antigo
+   *    `tb_antecedente`/`tb_problema_condicao`, que não existe). Ver
+   *    `getDiagnosedConditions`.
+   *  - measurements: CONFIRMADO via DDL — `tb_medicao`, mas os valores são
+   *    `varchar`, não numérico, e pressão arterial vem num campo único
+   *    (`nu_medicao_pressao_arterial`, ex. "120x80") em vez de dois campos
+   *    separados. Parseado em `parseMeasurementNumber`/`parseBloodPressure`.
+   *  - medications (uso contínuo): CONFIRMADO via DDL — `tb_medicamento_uso_continuo`
+   *    (a tabela dedicada de "em uso", não mais um filtro por flag numa
+   *    tabela de prescrição avulsa). Nome do medicamento via catálogo
+   *    `tb_medicamento` (nome da coluna, `no_medicamento`, é chute por
+   *    convenção — a tabela e o relacionamento são reais).
+   *  - allergies: CONFIRMADO via DDL — `tb_alergia` (ligada por
+   *    `co_prontuario`, não por `co_cidadao` direto). Nome da substância:
+   *    tenta enriquecer com o catálogo `tb_substancia_espec_alergia` (nome
+   *    de tabela real, nome de coluna chutado por convenção), com fallback
+   *    pro campo legado `no_substancia_especifica` (esse sim, 100%
+   *    confirmado na própria `tb_alergia`) se o catálogo não bater.
    */
   async getHealthSummary(sourcePatientId: string): Promise<HealthSummaryResult> {
     const [selfReported, diagnosed, measurements, medications, allergies] = await Promise.all([
@@ -776,152 +806,222 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * Problemas/condições diagnosticados em atendimento, codificados em
-   * CID-10 — schema repassado pelo cliente, ver ATENÇÃO em `getHealthSummary`.
-   * `dt_inicio_problema` é meu próprio palpite pra data de início (não veio
-   * do cliente) — tentado junto, cai pra versão sem data se o nome
-   * estiver errado.
+   * Problemas/condições diagnosticados — CONFIRMADO via DDL do cliente:
+   * `tb_problema` (o problema em si, ligado direto a `tb_prontuario`,
+   * codificado em CID-10 ou CIAP2, ou texto livre em `ds_outro` quando
+   * nenhum dos dois se aplica) + `tb_problema_evolucao` (a evolução mais
+   * recente, via `co_ultimo_problema_evolucao`, de onde vem a data real de
+   * início — `dt_inicio_problema`, confirmada). `no_ciap` segue o mesmo
+   * chute de nome de coluna já usado em `findAttendanceRows` (a tabela e o
+   * relacionamento são reais, o nome da coluna de rótulo é convenção).
    */
   private async getDiagnosedConditions(sourcePatientId: string): Promise<HealthCondition[] | null> {
-    const baseQuery = `SELECT DISTINCT pc.co_seq_problema_condicao::text AS co_seq_problema_condicao, cid.no_cid10{{DATE_COL}}
-       FROM public.tb_prontuario p
-       INNER JOIN public.tb_antecedente ant ON ant.co_prontuario = p.co_seq_prontuario
-       INNER JOIN public.tb_problema_condicao pc ON pc.co_seq_problema_condicao = ant.co_problema_condicao
-       LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = pc.co_cid10
-       WHERE p.co_cidadao = $1`;
-
     try {
-      const rows = await this.pool.query<{ co_seq_problema_condicao: string; no_cid10: string | null; dt_inicio_problema: string | null }>(
-        baseQuery.replace("{{DATE_COL}}", ", pc.dt_inicio_problema"),
+      const rows = await this.pool.query<{
+        co_seq_problema: string;
+        no_cid10: string | null;
+        no_ciap: string | null;
+        ds_outro: string | null;
+        dt_inicio_problema: string | null;
+      }>(
+        `SELECT DISTINCT pr.co_seq_problema::text AS co_seq_problema, cid.no_cid10, ciap.no_ciap, pr.ds_outro,
+                ev.dt_inicio_problema
+         FROM public.tb_problema pr
+         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = pr.co_prontuario
+         LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = pr.co_cid10
+         LEFT JOIN public.tb_ciap ciap ON ciap.co_ciap = pr.co_ciap
+         LEFT JOIN public.tb_problema_evolucao ev ON ev.co_seq_problema_evolucao = pr.co_ultimo_problema_evolucao
+         WHERE p.co_cidadao = $1`,
         [sourcePatientId],
       );
-      return rows
-        .filter((row) => row.no_cid10)
-        .map((row) => ({ id: `diagnosed:${row.co_seq_problema_condicao}`, label: row.no_cid10 as string, startedAt: row.dt_inicio_problema }));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar data de início do problema (dt_inicio_problema) — tentando sem data: ${message}`);
-    }
 
-    try {
-      const rows = await this.pool.query<{ co_seq_problema_condicao: string; no_cid10: string | null }>(
-        baseQuery.replace("{{DATE_COL}}", ""),
-        [sourcePatientId],
-      );
       return rows
-        .filter((row) => row.no_cid10)
-        .map((row) => ({ id: `diagnosed:${row.co_seq_problema_condicao}`, label: row.no_cid10 as string, startedAt: null }));
+        .map((row) => ({ ...row, label: row.no_cid10 ?? row.no_ciap ?? row.ds_outro }))
+        .filter((row): row is typeof row & { label: string } => !!row.label)
+        .map((row) => ({ id: `diagnosed:${row.co_seq_problema}`, label: row.label, startedAt: row.dt_inicio_problema }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar condições diagnosticadas (tb_antecedente/tb_problema_condicao) de ${sourcePatientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar condições diagnosticadas (tb_problema/tb_problema_evolucao) de ${sourcePatientId}: ${message}`);
       return null;
     }
   }
 
   /**
-   * ATENÇÃO(palpite não confirmado): `tb_medicao` ligada por
-   * `tb_atend_prof` — ver ATENÇÃO em `getHealthSummary`. Pega a medição do
-   * atendimento mais recente do cidadão.
+   * Converte um valor de medição do e-SUS pra número — os campos de
+   * `tb_medicao` são todos `varchar` (não numérico), e a instalação
+   * brasileira normalmente usa vírgula como separador decimal.
+   */
+  private parseMeasurementNumber(raw: string | null | undefined): number | null {
+    if (!raw) return null;
+    const value = Number(raw.trim().replace(",", "."));
+    return Number.isFinite(value) ? value : null;
+  }
+
+  /**
+   * `tb_medicao.nu_medicao_pressao_arterial` guarda sistólica e diastólica
+   * juntas num único campo de texto (ex. "120x80" ou "120/80") em vez de
+   * duas colunas — separa nos dois números que `VitalMeasurements` espera.
+   */
+  private parseBloodPressure(raw: string | null): { systolic: number | null; diastolic: number | null } {
+    const match = raw?.trim().match(/(\d+[.,]?\d*)\s*[xX/]\s*(\d+[.,]?\d*)/);
+    if (!match) return { systolic: null, diastolic: null };
+    return {
+      systolic: this.parseMeasurementNumber(match[1]),
+      diastolic: this.parseMeasurementNumber(match[2]),
+    };
+  }
+
+  /**
+   * CONFIRMADO via DDL: `tb_medicao`, ligada por `co_atend_prof` (mesmo
+   * caminho até `tb_prontuario` usado no resto da base). Data real da
+   * medição é `dt_medicao` (direto na própria tabela, mais preciso que a
+   * data do atendimento). Pega a medição mais recente do cidadão.
    */
   private async getVitalMeasurements(sourcePatientId: string): Promise<VitalMeasurements | null> {
     try {
       const rows = await this.pool.query<{
-        dt_inicio: string;
-        vl_peso: number | null;
-        vl_altura: number | null;
-        vl_pressao_sistolica: number | null;
-        vl_pressao_diastolica: number | null;
-        vl_frequencia_cardiaca: number | null;
-        vl_temperatura: number | null;
-        vl_saturacao_o2: number | null;
-        vl_glicemia: number | null;
+        dt_medicao: string;
+        nu_medicao_peso: string | null;
+        nu_medicao_altura: string | null;
+        nu_medicao_pressao_arterial: string | null;
+        nu_medicao_frequencia_cardiaca: string | null;
+        nu_medicao_temperatura: string | null;
+        nu_medicao_saturacao_o2: string | null;
+        nu_medicao_glicemia: string | null;
       }>(
-        `SELECT ap.dt_inicio, m.vl_peso::float8 AS vl_peso, m.vl_altura::float8 AS vl_altura,
-                m.vl_pressao_sistolica, m.vl_pressao_diastolica,
-                m.vl_frequencia_cardiaca, m.vl_temperatura::float8 AS vl_temperatura, m.vl_saturacao_o2, m.vl_glicemia
+        `SELECT m.dt_medicao, m.nu_medicao_peso, m.nu_medicao_altura, m.nu_medicao_pressao_arterial,
+                m.nu_medicao_frequencia_cardiaca, m.nu_medicao_temperatura, m.nu_medicao_saturacao_o2, m.nu_medicao_glicemia
          FROM public.tb_medicao m
          INNER JOIN public.tb_atend_prof ap ON ap.co_seq_atend_prof = m.co_atend_prof
          INNER JOIN public.tb_atend a ON a.co_seq_atend = ap.co_atend
          INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = a.co_prontuario
          WHERE p.co_cidadao = $1
-         ORDER BY ap.dt_inicio DESC NULLS LAST
+         ORDER BY m.dt_medicao DESC NULLS LAST
          LIMIT 1`,
         [sourcePatientId],
       );
 
       const row = rows[0];
       if (!row) return null;
+      const bloodPressure = this.parseBloodPressure(row.nu_medicao_pressao_arterial);
       return {
-        measuredAt: row.dt_inicio,
-        weightKg: row.vl_peso,
-        heightCm: row.vl_altura,
-        bloodPressureSystolic: row.vl_pressao_sistolica,
-        bloodPressureDiastolic: row.vl_pressao_diastolica,
-        heartRate: row.vl_frequencia_cardiaca,
-        temperature: row.vl_temperatura,
-        oxygenSaturation: row.vl_saturacao_o2,
-        capillaryGlucose: row.vl_glicemia,
+        measuredAt: row.dt_medicao,
+        weightKg: this.parseMeasurementNumber(row.nu_medicao_peso),
+        heightCm: this.parseMeasurementNumber(row.nu_medicao_altura),
+        bloodPressureSystolic: bloodPressure.systolic,
+        bloodPressureDiastolic: bloodPressure.diastolic,
+        heartRate: this.parseMeasurementNumber(row.nu_medicao_frequencia_cardiaca),
+        temperature: this.parseMeasurementNumber(row.nu_medicao_temperatura),
+        oxygenSaturation: this.parseMeasurementNumber(row.nu_medicao_saturacao_o2),
+        capillaryGlucose: this.parseMeasurementNumber(row.nu_medicao_glicemia),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar medições (tb_medicao, tabela não confirmada) de ${sourcePatientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar medições (tb_medicao) de ${sourcePatientId}: ${message}`);
       return null;
     }
   }
 
   /**
-   * ATENÇÃO(palpite não confirmado): `tb_prescricao_medicamento` ligada
-   * por `tb_atend_prof`, com `st_uso_continuo` marcando "em uso" — ver
-   * ATENÇÃO em `getHealthSummary`.
+   * CONFIRMADO via DDL: `tb_medicamento_uso_continuo` é a tabela dedicada
+   * de "medicamentos em uso" do cidadão (uma linha por medicamento,
+   * ligada direto a `tb_prontuario` — não precisa passar por atendimento),
+   * com `co_ultima_receita_medicamento` apontando pra prescrição mais
+   * recente desse ciclo (de onde vem a posologia). Nome do medicamento via
+   * catálogo `tb_medicamento` — nome de coluna (`no_medicamento`) é chute
+   * por convenção, tabela e relacionamento (`co_medicamento`) são reais.
    */
   private async getMedicationsInUse(sourcePatientId: string): Promise<ContinuousMedication[] | null> {
     try {
-      const rows = await this.pool.query<{ co_seq_prescricao_medicamento: string; no_medicamento: string | null; ds_posologia: string | null }>(
-        `SELECT DISTINCT pm.co_seq_prescricao_medicamento::text AS co_seq_prescricao_medicamento, pm.no_medicamento, pm.ds_posologia
-         FROM public.tb_prescricao_medicamento pm
-         INNER JOIN public.tb_atend_prof ap ON ap.co_seq_atend_prof = pm.co_atend_prof
-         INNER JOIN public.tb_atend a ON a.co_seq_atend = ap.co_atend
-         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = a.co_prontuario
-         WHERE p.co_cidadao = $1 AND pm.st_uso_continuo = true`,
+      const rows = await this.pool.query<{
+        co_seq_medicament_uso_continuo: string;
+        no_medicamento: string | null;
+        no_posologia: string | null;
+        ds_dose: string | null;
+      }>(
+        `SELECT tuc.co_seq_medicament_uso_continuo::text AS co_seq_medicament_uso_continuo,
+                med.no_medicamento, r.no_posologia, r.ds_dose
+         FROM public.tb_medicamento_uso_continuo tuc
+         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = tuc.co_prontuario
+         LEFT JOIN public.tb_medicamento med ON med.co_medicamento = tuc.co_medicamento
+         LEFT JOIN public.tb_receita_medicamento r ON r.co_seq_receita_medicamento = tuc.co_ultima_receita_medicamento
+         WHERE p.co_cidadao = $1`,
         [sourcePatientId],
       );
 
       return rows
         .filter((row) => row.no_medicamento)
         .map((row) => ({
-          id: `medication:${row.co_seq_prescricao_medicamento}`,
+          id: `medication:${row.co_seq_medicament_uso_continuo}`,
           name: row.no_medicamento as string,
-          dosage: row.ds_posologia,
+          dosage: row.no_posologia ?? row.ds_dose,
         }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar medicamentos de uso contínuo (tb_prescricao_medicamento, tabela não confirmada) de ${sourcePatientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar medicamentos de uso contínuo (tb_medicamento_uso_continuo) de ${sourcePatientId}: ${message}`);
       return null;
     }
   }
 
   /**
-   * ATENÇÃO(palpite de menor confiança): alergia não aparece em nenhuma
-   * ficha do CDS/RAS (formato oficial de exportação nacional) — é dado só
-   * local, então não tenho nem a confirmação conceitual que tenho pras
-   * outras fontes. `tb_alergia` ligada direto ao cidadão (não ao
-   * atendimento — é informação persistente do cadastro, não de uma visita
-   * específica).
+   * CONFIRMADO via DDL: `tb_alergia` ligada por `co_prontuario` (não por
+   * `co_cidadao` direto). O nome da substância pode vir de dois lugares —
+   * `no_substancia_especifica` é um campo legado direto na própria tabela
+   * (mantido só pra registros antigos, mas 100% real), ou, pra registros
+   * novos, `co_substancia_especifica` aponta pro catálogo estruturado
+   * `tb_substancia_espec_alergia` (tabela real, nome da coluna de rótulo
+   * chutado por convenção). O tipo de reação vem da evolução mais recente
+   * (`co_ultima_alergia_evolucao` → `tb_alergia_evolucao` →
+   * `tb_tipo_reacao_alergia`, mesmo padrão de chute).
+   *
+   * Duas tentativas em cascata: 1) com os catálogos (mais rico, nomes de
+   * coluna chutados); 2) só o campo legado direto em `tb_alergia` (garantido
+   * — se isso também vier vazio pra registros novos, é porque a
+   * instalação não populou mais o campo legado, não um erro de query).
    */
   private async getAllergies(sourcePatientId: string): Promise<AllergyEntry[] | null> {
     try {
-      const rows = await this.pool.query<{ co_seq_alergia: string; ds_alergia: string | null }>(
-        `SELECT co_seq_alergia::text AS co_seq_alergia, ds_alergia
-         FROM public.tb_alergia
-         WHERE co_cidadao = $1`,
+      const rows = await this.pool.query<{
+        co_seq_alergia: string;
+        substancia: string | null;
+        reacao: string | null;
+      }>(
+        `SELECT al.co_seq_alergia::text AS co_seq_alergia,
+                COALESCE(sub.no_substancia_espec_alergia, al.no_substancia_especifica) AS substancia,
+                tr.no_tipo_reacao_alergia AS reacao
+         FROM public.tb_alergia al
+         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = al.co_prontuario
+         LEFT JOIN public.tb_substancia_espec_alergia sub ON sub.co_substancia_espec_alergia = al.co_substancia_especifica
+         LEFT JOIN public.tb_alergia_evolucao ev ON ev.co_seq_alergia_evolucao = al.co_ultima_alergia_evolucao
+         LEFT JOIN public.tb_tipo_reacao_alergia tr ON tr.co_tipo_reacao_alergia = ev.co_tipo_reacao_alergia
+         WHERE p.co_cidadao = $1`,
         [sourcePatientId],
       );
       return rows
-        .filter((row) => row.ds_alergia)
-        .map((row) => ({ id: `allergy:${row.co_seq_alergia}`, label: row.ds_alergia as string }));
+        .filter((row) => row.substancia)
+        .map((row) => ({
+          id: `allergy:${row.co_seq_alergia}`,
+          label: row.reacao ? `${row.substancia} — ${row.reacao}` : (row.substancia as string),
+        }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar alergias (tb_alergia, tabela não confirmada) de ${sourcePatientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar alergias com catálogo (tb_substancia_espec_alergia/tb_tipo_reacao_alergia, coluna não confirmada) — tentando só o campo legado: ${message}`);
+    }
+
+    try {
+      const rows = await this.pool.query<{ co_seq_alergia: string; no_substancia_especifica: string | null }>(
+        `SELECT al.co_seq_alergia::text AS co_seq_alergia, al.no_substancia_especifica
+         FROM public.tb_alergia al
+         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = al.co_prontuario
+         WHERE p.co_cidadao = $1`,
+        [sourcePatientId],
+      );
+      return rows
+        .filter((row) => row.no_substancia_especifica)
+        .map((row) => ({ id: `allergy:${row.co_seq_alergia}`, label: row.no_substancia_especifica as string }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar alergias (tb_alergia) de ${sourcePatientId}: ${message}`);
       return null;
     }
   }
