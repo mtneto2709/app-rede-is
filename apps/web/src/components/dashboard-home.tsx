@@ -111,16 +111,18 @@ export function DashboardHome({
         <div className="grid grid-cols-2 gap-4">
           {quickAccess.map((item) => (
             <Link key={item.key} href={item.href} className="rounded-2xl bg-surface shadow-sm p-4 flex flex-col gap-2">
-              <div className={`h-9 w-9 rounded-full flex items-center justify-center ${TONE_BG[item.tone]}`}>
-                <item.icon className={`h-4 w-4 ${TONE_TEXT[item.tone]}`} />
-              </div>
-              {isLoading ? (
-                <Skeleton className="h-7 w-10" />
-              ) : (
-                <div className={`text-2xl font-black ${TONE_TEXT[item.tone]}`}>
-                  {String(stats?.[item.key] ?? 0).padStart(2, "0")}
+              <div className="flex items-start justify-between">
+                <div className={`h-9 w-9 rounded-full flex items-center justify-center ${TONE_BG[item.tone]}`}>
+                  <item.icon className={`h-4 w-4 ${TONE_TEXT[item.tone]}`} />
                 </div>
-              )}
+                {isLoading ? (
+                  <Skeleton className="h-9 w-12" />
+                ) : (
+                  <div className={`text-3xl font-black leading-none ${TONE_TEXT[item.tone]}`}>
+                    {String(stats?.[item.key] ?? 0).padStart(2, "0")}
+                  </div>
+                )}
+              </div>
               <div className="text-xs text-text-secondary font-medium">{item.label}</div>
             </Link>
           ))}

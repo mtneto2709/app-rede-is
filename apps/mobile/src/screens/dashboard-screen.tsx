@@ -71,10 +71,12 @@ export function DashboardScreen() {
             const color = toneColorAt(theme, index);
             return (
               <Pressable key={item.key} style={styles.gridItem} onPress={() => navigation.navigate(item.tab)}>
-                <View style={[styles.gridIcon, { backgroundColor: withAlpha(color, "1A") }]}>
-                  <Ionicons name={item.icon} size={18} color={color} />
+                <View style={styles.gridTopRow}>
+                  <View style={[styles.gridIcon, { backgroundColor: withAlpha(color, "1A") }]}>
+                    <Ionicons name={item.icon} size={18} color={color} />
+                  </View>
+                  <Text style={[styles.gridCount, { color }]}>{String(stats?.[item.key] ?? 0).padStart(2, "0")}</Text>
                 </View>
-                <Text style={[styles.gridCount, { color }]}>{String(stats?.[item.key] ?? 0).padStart(2, "0")}</Text>
                 <Text style={styles.gridLabel}>{item.label}</Text>
               </Pressable>
             );
@@ -145,8 +147,9 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       padding: 16,
       gap: 6,
     },
+    gridTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
     gridIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-    gridCount: { fontSize: 24, fontWeight: "800" },
+    gridCount: { fontSize: 30, fontWeight: "800", lineHeight: 34 },
     gridLabel: { fontSize: 12, color: theme.colors.textSecondary },
     servicesGrid: {
       flexDirection: "row",
