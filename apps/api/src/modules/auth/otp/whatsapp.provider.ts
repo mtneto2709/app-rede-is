@@ -44,34 +44,45 @@ export class WhatsappProvider implements OtpChannelSender {
 
     const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${this.env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.env.WHATSAPP_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: normalizePhoneNumber(contact),
-        type: "template",
-        template: {
-          name: this.env.WHATSAPP_TEMPLATE_NAME,
-          language: { code: this.env.WHATSAPP_TEMPLATE_LANGUAGE },
-          components: [
-            {
-              type: "body",
-              parameters: [{ type: "text", text: code }],
-            },
-            {
-              type: "button",
-              sub_type: "url",
-              index: "0",
-              parameters: [{ type: "text", text: code }],
-            },
-          ],
+    let response: Response;
+    try {
+      // Sem timeout, uma rede instável deixa o fetch pendurado indefinidamente
+      // — e o botão "Enviar código" no app fica girando pra sempre, sem
+      // nunca mostrar um erro. 15s é generoso pra a Graph API responder.
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.env.WHATSAPP_API_TOKEN}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: normalizePhoneNumber(contact),
+          type: "template",
+          template: {
+            name: this.env.WHATSAPP_TEMPLATE_NAME,
+            language: { code: this.env.WHATSAPP_TEMPLATE_LANGUAGE },
+            components: [
+              {
+                type: "body",
+                parameters: [{ type: "text", text: code }],
+              },
+              {
+                type: "button",
+                sub_type: "url",
+                index: "0",
+                parameters: [{ type: "text", text: code }],
+              },
+            ],
+          },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Falha de rede ao enviar WhatsApp (${message.includes("timeout") ? "timeout" : "erro"}): ${message}`);
+      throw new Error("Não foi possível enviar o código por WhatsApp (falha de rede)");
+    }
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
