@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/components/screen-header";
 
 type CardTemplate = TenantTheme["cards"][number];
 
-/** Frente/verso do molde de cartão, com nome/CNS reais do paciente sobrepostos — nunca gravados na imagem. */
+/** Frente/verso do molde de cartão, com nome/CPF/CNS reais do paciente sobrepostos — nunca gravados na imagem. */
 function CardFace({ card, profile, face }: { card: CardTemplate; profile: PatientProfileSummary | null; face: "front" | "back" }) {
   const imageUrl = face === "front" ? card.frontImageUrl : card.backImageUrl;
   if (!imageUrl) return null;
@@ -17,13 +17,24 @@ function CardFace({ card, profile, face }: { card: CardTemplate; profile: Patien
   return (
     <View style={styles.faceContainer}>
       <Image source={{ uri: imageUrl }} style={styles.faceImage} resizeMode="cover" />
-      {face === "front" && card.showPatientName && profile?.name && (
-        <Text style={[styles.overlayText, { top: "27%" }]} numberOfLines={1}>
-          {profile.name}
-        </Text>
-      )}
-      {face === "front" && card.showCns && profile?.cns && (
-        <Text style={[styles.overlayText, { top: "40%" }]}>{profile.cns}</Text>
+      {face === "front" && (
+        <View style={styles.overlayGroup}>
+          {card.showPatientName && profile?.name && (
+            <Text style={styles.overlayText} numberOfLines={1}>
+              {profile.name}
+            </Text>
+          )}
+          {card.showCpf && profile?.cpf && (
+            <Text style={styles.overlayText} numberOfLines={1}>
+              {profile.cpf}
+            </Text>
+          )}
+          {card.showCns && profile?.cns && (
+            <Text style={styles.overlayText} numberOfLines={1}>
+              {profile.cns}
+            </Text>
+          )}
+        </View>
       )}
     </View>
   );
@@ -94,7 +105,15 @@ export function CardsScreen() {
 const styles = StyleSheet.create({
   faceContainer: { width: "100%", aspectRatio: 1013 / 638, borderRadius: 16, overflow: "hidden" },
   faceImage: { width: "100%", height: "100%" },
-  overlayText: { position: "absolute", left: "4.7%", fontSize: 15, fontWeight: "700", color: "#12314f" },
+  overlayGroup: { position: "absolute", left: "9%", top: "66%", flexDirection: "column", gap: 4 },
+  overlayText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    textShadowColor: "rgba(0,0,0,0.55)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", paddingHorizontal: 24 },
   closeButton: { position: "absolute", top: 56, right: 24, padding: 8 },
   modalCardWrap: { width: "100%" },

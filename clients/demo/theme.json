@@ -71,7 +71,8 @@
       "frontImageUrl": "/clients/demo/cards/sus-front.png",
       "backImageUrl": "/clients/demo/cards/sus-back.png",
       "showPatientName": true,
-      "showCns": true
+      "showCns": true,
+      "showCpf": true
     }
   ],
   "customLinks": [

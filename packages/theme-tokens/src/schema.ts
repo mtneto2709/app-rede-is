@@ -112,9 +112,9 @@ export const TenantTheme = z.object({
    * Cartões virtuais do paciente (SUS + cartões próprios do cliente, ex.
    * cartão do munícipe). As imagens são só o "molde" (frente/verso) — nome
    * e número do cartão do paciente são sobrepostos em tempo de execução
-   * pelo app, nunca gravados na imagem. `showCns` liga a sobreposição do
-   * número do CNS (só faz sentido pro cartão "sus"; cartões próprios do
-   * cliente normalmente não têm esse dado).
+   * pelo app, nunca gravados na imagem. `showCns`/`showCpf` ligam a
+   * sobreposição do número do CNS/CPF (só fazem sentido pro cartão "sus";
+   * cartões próprios do cliente normalmente não têm esse dado).
    */
   cards: z
     .array(
@@ -127,6 +127,7 @@ export const TenantTheme = z.object({
         backImageUrl: z.string().optional(),
         showPatientName: z.boolean().default(true),
         showCns: z.boolean().default(false),
+        showCpf: z.boolean().default(false),
       }),
     )
     .default([]),

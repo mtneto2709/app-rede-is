@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 type CardTemplate = TenantTheme["cards"][number];
 
-/** Frente/verso do molde de cartão, com nome/CNS reais do paciente sobrepostos — nunca gravados na imagem. */
+/** Frente/verso do molde de cartão, com nome/CPF/CNS reais do paciente sobrepostos — nunca gravados na imagem. */
 function CardFace({
   card,
   profile,
@@ -27,21 +27,20 @@ function CardFace({
     <div className="relative w-full rounded-2xl overflow-hidden shadow-xl" style={{ aspectRatio: "1013 / 638" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={imageUrl} alt={card.title} className="absolute inset-0 w-full h-full object-cover" />
-      {face === "front" && card.showPatientName && profile?.name && (
-        <p
-          className="absolute font-bold text-[#12314f]"
-          style={{ left: "4.7%", top: "27%", fontSize: "clamp(11px, 2.4vw, 22px)" }}
+      {face === "front" && (
+        <div
+          className="absolute flex flex-col gap-1 font-bold text-white"
+          style={{
+            left: "9%",
+            top: "66%",
+            fontSize: "clamp(9px, 1.9vw, 17px)",
+            textShadow: "0 1px 4px rgba(0,0,0,0.55)",
+          }}
         >
-          {profile.name}
-        </p>
-      )}
-      {face === "front" && card.showCns && profile?.cns && (
-        <p
-          className="absolute font-bold text-[#12314f] tracking-wide"
-          style={{ left: "4.7%", top: "40%", fontSize: "clamp(11px, 2.4vw, 22px)" }}
-        >
-          {profile.cns}
-        </p>
+          {card.showPatientName && profile?.name && <p>{profile.name}</p>}
+          {card.showCpf && profile?.cpf && <p>{profile.cpf}</p>}
+          {card.showCns && profile?.cns && <p>{profile.cns}</p>}
+        </div>
       )}
     </div>
   );
