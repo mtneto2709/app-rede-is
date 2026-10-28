@@ -8,12 +8,20 @@ import {
   classifyAttendanceCategory,
   classifyAttendanceType,
 } from "../../../common/utils/attendance-classification";
+import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
 import type {
   HealthSummaryResult,
   IdentityCandidate,
   IdentityProfile,
   PatientSourceRepository,
 } from "../../../common/database/patient-source-repository.interface";
+
+/** Converte uma coordenada que pode vir como texto ou número do Postgres — ver `findHealthUnits`. */
+function parseCoordinate(raw: string | null): number | null {
+  if (!raw) return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
 
 /**
  * Repositório somente-leitura do Sistema IS.
@@ -136,9 +144,46 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
     return [];
   }
 
+  /**
+   * CONFIRMADO via dados reais de `sotech.cdg_unidadesaude` (o cliente
+   * mandou um dump de INSERTs da tabela real). `unidadesaude` é o nome,
+   * `endereco`/`numero`/`complemento` montam o endereço, `telefone1`/
+   * `telefone2` o telefone. `latitude`/`longitude` vieram nulas em todos os
+   * registros de exemplo — não dá pra confirmar o tipo da coluna (texto vs.
+   * numérico), por isso o parse é feito em JS (`parseCoordinate`), igual ao
+   * padrão já usado pra medições do e-SUS. Sem coluna de tipo de unidade
+   * (UBS/hospital/clínica) — classificado por palavra-chave no nome, igual
+   * ao e-SUS PEC. `ativo = true` filtra as desativadas.
+   */
   async findHealthUnits(): Promise<HealthUnit[]> {
-    // TODO(db-mapping): SELECT ... FROM <tabela_unidades_saude>
-    return [];
+    const rows = await this.pool.query<{
+      pkunidadesaude: string;
+      unidadesaude: string;
+      endereco: string | null;
+      numero: string | null;
+      telefone1: string | null;
+      telefone2: string | null;
+      latitude: string | null;
+      longitude: string | null;
+    }>(
+      `SELECT pkunidadesaude::text AS pkunidadesaude, unidadesaude, endereco, numero, telefone1, telefone2, latitude, longitude
+       FROM sotech.cdg_unidadesaude
+       WHERE ativo = true
+       ORDER BY unidadesaude`,
+    );
+
+    return rows.map((row) => ({
+      id: row.pkunidadesaude,
+      name: row.unidadesaude,
+      type: classifyHealthUnitType(row.unidadesaude),
+      address: row.endereco ? [row.endereco, row.numero].filter(Boolean).join(", ") : null,
+      phone: row.telefone1 ?? row.telefone2,
+      specialties: [],
+      openingHours: null,
+      latitude: parseCoordinate(row.latitude),
+      longitude: parseCoordinate(row.longitude),
+      sourceSystem: "sistema-is" as const,
+    }));
   }
 
   /**
