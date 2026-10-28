@@ -36,6 +36,13 @@ function addMonths(isoDate: string, months: number): Date {
  * vier vazio (instalação sem tb_calendario_vacinal populada) — Calendário
  * Nacional do PNI fixo, casado por palavra-chave no nome do imunobiológico
  * já que não há códigos de catálogo pra comparar nesse caso.
+ *
+ * Nos dois caminhos: uma dose administrada que não corresponde a NENHUM
+ * slot do calendário (ex.: campanha de influenza/covid — não fazem parte
+ * do calendário de rotina) não pode simplesmente desaparecer da tela só
+ * porque não tinha onde encaixar. Entra como item avulso no fim da lista
+ * ("administered", sem `dueDate", já que não tem data prevista — não é
+ * uma dose de rotina com faixa etária).
  */
 @Injectable()
 export class VaccinationService {
@@ -60,13 +67,15 @@ export class VaccinationService {
       if (!administeredByKey.has(key)) administeredByKey.set(key, record);
     }
 
+    const usedKeys = new Set<string>();
     const now = Date.now();
 
-    return calendar.map((slot) => {
+    const fromCalendar = calendar.map((slot) => {
       const key = `${slot.immunobiologicId}:${slot.doseId}`;
       const match = administeredByKey.get(key);
 
       if (match) {
+        usedKeys.add(key);
         return {
           id: key,
           immunobiologicName: slot.immunobiologicName,
@@ -93,6 +102,30 @@ export class VaccinationService {
         sourceSystem: "esus-pec" as const,
       };
     });
+
+    // Doses "extra" (fora do calendário de rotina, ex. campanha de
+    // influenza/covid) listam TODOS os registros administrados, não só um
+    // por chave — ao contrário das doses de rotina (1 slot = 1 dose), uma
+    // vacina de campanha pode ter mais de uma aplicação real (ex. uma dose
+    // de influenza por ano) e cada uma precisa aparecer.
+    const extra: VaccinationCardEntry[] = administered
+      .filter((record) => {
+        if (!record.immunobiologicId || !record.doseId) return true;
+        return !usedKeys.has(`${record.immunobiologicId}:${record.doseId}`);
+      })
+      .map((record, index) => ({
+        id: `extra:${record.immunobiologicId ?? record.immunobiologicName}:${index}`,
+        immunobiologicName: record.immunobiologicName,
+        doseLabel: record.doseLabel ?? "Dose",
+        status: "administered" as const,
+        dueDate: null,
+        administeredAt: record.administeredAt,
+        administeredAtHealthUnit: record.healthUnitName,
+        administeredByProfessional: record.professionalName,
+        sourceSystem: "esus-pec" as const,
+      }));
+
+    return [...fromCalendar, ...extra];
   }
 
   /**
@@ -105,9 +138,10 @@ export class VaccinationService {
       (a, b) => new Date(a.administeredAt).getTime() - new Date(b.administeredAt).getTime(),
     );
     const consumedCount = new Map<string, number>();
+    const usedRecords = new Set<AdministeredVaccine>();
     const now = Date.now();
 
-    return PNI_CALENDAR.map((def) => {
+    const fromPni = PNI_CALENDAR.map((def) => {
       const groupKey = def.matchKeywords[0]!;
       const candidates = sortedByDate.filter((v) =>
         def.matchKeywords.some((kw) => normalizeForCompare(v.immunobiologicName).includes(kw)),
@@ -118,6 +152,7 @@ export class VaccinationService {
 
       if (match) {
         consumedCount.set(groupKey, alreadyUsed + 1);
+        usedRecords.add(match);
         return {
           id,
           immunobiologicName: def.immunobiologicName,
@@ -144,5 +179,21 @@ export class VaccinationService {
         sourceSystem: "esus-pec" as const,
       };
     });
+
+    const extra: VaccinationCardEntry[] = sortedByDate
+      .filter((record) => !usedRecords.has(record))
+      .map((record, index) => ({
+        id: `extra:${record.immunobiologicId ?? record.immunobiologicName}:${index}`,
+        immunobiologicName: record.immunobiologicName,
+        doseLabel: record.doseLabel ?? "Dose",
+        status: "administered" as const,
+        dueDate: null,
+        administeredAt: record.administeredAt,
+        administeredAtHealthUnit: record.healthUnitName,
+        administeredByProfessional: record.professionalName,
+        sourceSystem: "esus-pec" as const,
+      }));
+
+    return [...fromPni, ...extra];
   }
 }
