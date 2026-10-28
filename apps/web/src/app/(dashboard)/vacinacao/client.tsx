@@ -64,21 +64,21 @@ export function VaccinationPageClient() {
           groupByImmunobiologic(data.entries).map(([immunoName, doses]) => (
             <section key={immunoName} className="space-y-2">
               <h2 className="text-sm font-bold">{immunoName}</h2>
-              <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-3">
                 {doses.map((dose) => (
-                  <Card key={dose.id} className={`p-4 border-l-4 ${STATUS_BORDER[dose.status]}`}>
-                    <div className="flex justify-between items-start gap-2">
-                      <p className="text-sm font-medium">{dose.doseLabel}</p>
-                      <Badge tone={STATUS_TONE[dose.status]}>{STATUS_LABEL[dose.status]}</Badge>
-                    </div>
+                  <Card key={dose.id} className={`p-3 border-l-4 ${STATUS_BORDER[dose.status]} space-y-1.5`}>
+                    <p className="text-sm font-medium leading-tight">{dose.doseLabel}</p>
+                    <Badge tone={STATUS_TONE[dose.status]}>{STATUS_LABEL[dose.status]}</Badge>
                     {dose.status === "administered" ? (
-                      <div className="text-xs text-text-secondary mt-1 space-y-0.5">
+                      <div className="text-xs text-text-secondary space-y-0.5">
                         <p>Aplicada em {formatDate(dose.administeredAt)}</p>
-                        {dose.administeredAtHealthUnit && <p>{dose.administeredAtHealthUnit}</p>}
-                        {dose.administeredByProfessional && <p>{dose.administeredByProfessional}</p>}
+                        {dose.administeredAtHealthUnit && <p className="truncate">{dose.administeredAtHealthUnit}</p>}
+                        {dose.administeredByProfessional && (
+                          <p className="truncate">{dose.administeredByProfessional}</p>
+                        )}
                       </div>
                     ) : (
-                      <p className="text-xs text-text-secondary mt-1">Prevista para {formatDate(dose.dueDate)}</p>
+                      <p className="text-xs text-text-secondary">Prevista para {formatDate(dose.dueDate)}</p>
                     )}
                   </Card>
                 ))}
