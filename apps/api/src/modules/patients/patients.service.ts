@@ -121,22 +121,43 @@ export class PatientsService {
    * vazia mostrando tudo como "atrasada"/"futura") em vez de quebrar a
    * tela inteira.
    */
+  /**
+   * Vacinação vive só no e-SUS PEC, mesmo quando o vínculo da conta é com o
+   * Sistema IS — é o mesmo cidadão nas duas bases, só que o primeiro acesso
+   * pode ter resolvido pro Sistema IS (ex.: contato não encontrado no
+   * e-SUS naquela busca). Por isso, quando o vínculo não é direto com o
+   * e-SUS, busca o cadastro de lá por CPF antes de desistir.
+   */
+  private async resolveEsusCitizenId(link: { sourceSystem: string; sourcePatientId: string }): Promise<string | null> {
+    if (link.sourceSystem === "esus-pec") return link.sourcePatientId;
+
+    const profile = await this.repositoryFor(link.sourceSystem).getIdentityProfile(link.sourcePatientId);
+    if (!profile?.cpf) return null;
+
+    return this.esusPec.findCitizenIdByCpf(profile.cpf).catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Falha ao cruzar CPF com o e-SUS PEC (vacinação): ${message}`);
+      return null;
+    });
+  }
+
   async getVaccinationCard(tenantId: string, userId: string, ip?: string): Promise<VaccinationCardResponse> {
     const link = await this.requireLink(userId);
-    if (link.sourceSystem !== "esus-pec") {
+    const esusCitizenId = await this.resolveEsusCitizenId(link);
+    if (!esusCitizenId) {
       return { available: false, entries: [] };
     }
 
     const [profile, calendar, administered] = await Promise.all([
-      this.esusPec.getIdentityProfile(link.sourcePatientId),
+      this.esusPec.getIdentityProfile(esusCitizenId),
       this.esusPec.findVaccinationCalendar().catch((err): VaccinationCalendarSlot[] => {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.error(`Falha ao buscar calendário vacinal: ${message}`);
         return [];
       }),
-      this.esusPec.findAdministeredVaccines(link.sourcePatientId).catch((err): AdministeredVaccine[] => {
+      this.esusPec.findAdministeredVaccines(esusCitizenId).catch((err): AdministeredVaccine[] => {
         const message = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Falha ao buscar vacinas administradas (${link.sourcePatientId}): ${message}`);
+        this.logger.error(`Falha ao buscar vacinas administradas (${esusCitizenId}): ${message}`);
         return [];
       }),
     ]);

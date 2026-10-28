@@ -680,6 +680,30 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
+   * Cruza um CPF (vindo de qualquer uma das duas bases) com o cadastro do
+   * cidadão no e-SUS PEC. Usado quando o paciente logado está vinculado ao
+   * Sistema IS, mas um dado só existe no e-SUS (hoje, só vacinação) — o
+   * cadastro no e-SUS é o mesmo cidadão, só que por outro caminho de busca
+   * (não pelo contato usado no primeiro acesso). Compara só dígitos dos
+   * dois lados — `nu_cpf` pode estar salvo com ou sem máscara (mesmo
+   * motivo do fix de telefone com/sem DDI).
+   */
+  async findCitizenIdByCpf(cpf: string): Promise<string | null> {
+    const digits = cpf.replace(/\D/g, "");
+    if (!digits) return null;
+
+    const rows = await this.pool.query<{ co_seq_cidadao: string }>(
+      `SELECT co_seq_cidadao::text AS co_seq_cidadao
+       FROM public.tb_cidadao
+       WHERE st_ativo = 1 AND regexp_replace(coalesce(nu_cpf, ''), '\\D', '', 'g') = $1
+       LIMIT 1`,
+      [digits],
+    );
+
+    return rows[0]?.co_seq_cidadao ?? null;
+  }
+
+  /**
    * ATENÇÃO(coluna não confirmada): `nu_cns` segue o mesmo padrão de
    * `nu_telefone_celular`/`nu_cpf` (já confirmados em `tb_cidadao`), mas não
    * consegui confirmar esse nome específico — rede bloqueada pra doc
