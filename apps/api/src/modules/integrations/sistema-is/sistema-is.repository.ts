@@ -153,7 +153,14 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
    * numérico), por isso o parse é feito em JS (`parseCoordinate`), igual ao
    * padrão já usado pra medições do e-SUS. Sem coluna de tipo de unidade
    * (UBS/hospital/clínica) — classificado por palavra-chave no nome, igual
-   * ao e-SUS PEC. `ativo = true` filtra as desativadas.
+   * ao e-SUS PEC.
+   *
+   * Filtro de "só unidades do município" CONFIRMADO pelo cliente: não é por
+   * cidade (`fkcidade`) — é por `sotech.cdx_unidadesaude.fkmantenedora`
+   * (tabela complementar, uma linha por unidade via `fkunidadesaude`) não
+   * ser nulo. `INNER JOIN` já exclui unidade sem linha em `cdx_unidadesaude`
+   * nenhuma; o filtro explícito cobre o caso de existir a linha mas com
+   * `fkmantenedora` nulo mesmo assim.
    */
   async findHealthUnits(): Promise<HealthUnit[]> {
     const rows = await this.pool.query<{
@@ -166,10 +173,12 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
       latitude: string | null;
       longitude: string | null;
     }>(
-      `SELECT pkunidadesaude::text AS pkunidadesaude, unidadesaude, endereco, numero, telefone1, telefone2, latitude, longitude
-       FROM sotech.cdg_unidadesaude
-       WHERE ativo = true
-       ORDER BY unidadesaude`,
+      `SELECT u.pkunidadesaude::text AS pkunidadesaude, u.unidadesaude, u.endereco, u.numero,
+              u.telefone1, u.telefone2, u.latitude, u.longitude
+       FROM sotech.cdg_unidadesaude u
+       INNER JOIN sotech.cdx_unidadesaude x ON x.fkunidadesaude = u.pkunidadesaude
+       WHERE u.ativo = true AND x.fkmantenedora IS NOT NULL
+       ORDER BY u.unidadesaude`,
     );
 
     return rows.map((row) => ({
