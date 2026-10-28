@@ -67,7 +67,7 @@ export class VaccinationService {
       if (!administeredByKey.has(key)) administeredByKey.set(key, record);
     }
 
-    const usedKeys = new Set<string>();
+    const usedRecords = new Set<AdministeredVaccine>();
     const now = Date.now();
 
     const fromCalendar = calendar.map((slot) => {
@@ -75,7 +75,7 @@ export class VaccinationService {
       const match = administeredByKey.get(key);
 
       if (match) {
-        usedKeys.add(key);
+        usedRecords.add(match);
         return {
           id: key,
           immunobiologicName: slot.immunobiologicName,
@@ -104,15 +104,13 @@ export class VaccinationService {
     });
 
     // Doses "extra" (fora do calendário de rotina, ex. campanha de
-    // influenza/covid) listam TODOS os registros administrados, não só um
-    // por chave — ao contrário das doses de rotina (1 slot = 1 dose), uma
-    // vacina de campanha pode ter mais de uma aplicação real (ex. uma dose
-    // de influenza por ano) e cada uma precisa aparecer.
+    // influenza/covid) listam TODOS os registros administrados que não
+    // foram o ESPECÍFICO que casou com um slot — duas doses reais com a
+    // mesma chave (ex. influenza tomada em anos diferentes, mesmo
+    // imunobiológico/rótulo "única") não podem as duas sumir só porque uma
+    // delas preencheu o slot; só a que de fato casou sai da lista.
     const extra: VaccinationCardEntry[] = administered
-      .filter((record) => {
-        if (!record.immunobiologicId || !record.doseId) return true;
-        return !usedKeys.has(`${record.immunobiologicId}:${record.doseId}`);
-      })
+      .filter((record) => !usedRecords.has(record))
       .map((record, index) => ({
         id: `extra:${record.immunobiologicId ?? record.immunobiologicName}:${index}`,
         immunobiologicName: record.immunobiologicName,
