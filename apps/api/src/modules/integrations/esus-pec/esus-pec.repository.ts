@@ -624,8 +624,8 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
 
     const rows = await this.pool.query<{ co_seq_cidadao: string; no_cidadao: string }>(
       isEmail
-        ? `SELECT co_seq_cidadao, no_cidadao FROM public.tb_cidadao WHERE lower(ds_email) = lower($1) AND st_ativo = 1`
-        : `SELECT co_seq_cidadao, no_cidadao FROM public.tb_cidadao
+        ? `SELECT co_seq_cidadao::text AS co_seq_cidadao, no_cidadao FROM public.tb_cidadao WHERE lower(ds_email) = lower($1) AND st_ativo = 1`
+        : `SELECT co_seq_cidadao::text AS co_seq_cidadao, no_cidadao FROM public.tb_cidadao
            WHERE st_ativo = 1 AND (
              RIGHT(regexp_replace(coalesce(nu_telefone_celular, ''), '\\D', '', 'g'), 11) = RIGHT($1, 11)
              OR RIGHT(regexp_replace(coalesce(nu_telefone_contato, ''), '\\D', '', 'g'), 11) = RIGHT($1, 11)
@@ -649,7 +649,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       nu_telefone_contato: string | null;
       ds_email: string | null;
     }>(
-      `SELECT co_seq_cidadao, no_cidadao, no_mae, no_pai, dt_nascimento, nu_cpf,
+      `SELECT co_seq_cidadao::text AS co_seq_cidadao, no_cidadao, no_mae, no_pai, dt_nascimento, nu_cpf,
               nu_telefone_celular, nu_telefone_contato, ds_email
        FROM public.tb_cidadao WHERE co_seq_cidadao = $1`,
       [sourcePatientId],

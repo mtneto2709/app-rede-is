@@ -163,12 +163,12 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
 
     const rows = await this.pool.query<{ pkpaciente: string; paciente: string }>(
       isEmail
-        ? `SELECT DISTINCT p.pkpaciente, p.paciente
+        ? `SELECT DISTINCT p.pkpaciente::text AS pkpaciente, p.paciente
            FROM sotech.cdg_contato c
            INNER JOIN sotech.cdg_paciente p ON p.pkpaciente = c.fkpaciente
            WHERE c.ativo = true AND p.ativo = true AND c.fkpaciente IS NOT NULL
              AND lower(c.email) = lower($1)`
-        : `SELECT DISTINCT p.pkpaciente, p.paciente
+        : `SELECT DISTINCT p.pkpaciente::text AS pkpaciente, p.paciente
            FROM sotech.cdg_contato c
            INNER JOIN sotech.cdg_paciente p ON p.pkpaciente = c.fkpaciente
            WHERE c.ativo = true AND p.ativo = true AND c.fkpaciente IS NOT NULL AND (
@@ -206,7 +206,7 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
       celulares: string[] | null;
       emails: string[] | null;
     }>(
-      `SELECT p.pkpaciente, p.paciente, p.mae, p.pai, p.cpf, p.datanascimento, p.endereco,
+      `SELECT p.pkpaciente::text AS pkpaciente, p.paciente, p.mae, p.pai, p.cpf, p.datanascimento, p.endereco,
               bai.bairro, nat.municipio AS naturalidade,
               cel.celulares, mails.emails
        FROM sotech.cdg_paciente p
