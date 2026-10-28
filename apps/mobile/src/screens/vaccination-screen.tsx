@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { ReactElement } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import type { VaccinationCardEntry, VaccinationCardResponse } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
@@ -10,6 +11,11 @@ const STATUS_LABEL: Record<VaccinationCardEntry["status"], string> = {
   administered: "Tomada",
   late: "Atrasada",
   upcoming: "Futura",
+};
+
+const SOURCE_LABEL: Record<VaccinationCardEntry["sourceSystem"], string> = {
+  "sistema-is": "Sistema IS",
+  "esus-pec": "e-SUS PEC",
 };
 
 const ALL_STATUSES = Object.keys(STATUS_LABEL) as VaccinationCardEntry["status"][];
@@ -29,11 +35,85 @@ function groupByImmunobiologic(entries: VaccinationCardEntry[]): [string, Vaccin
   return [...groups.entries()];
 }
 
+function DetailRow({ label, value, theme }: { label: string; value: string | null; theme: ReturnType<typeof useTheme> }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        gap: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: "rgba(0,0,0,0.06)",
+        paddingBottom: 8,
+      }}
+    >
+      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary, flex: 1, textAlign: "right" }}>
+        {value ?? "Não informado"}
+      </Text>
+    </View>
+  );
+}
+
+function DoseDetailModal({
+  dose,
+  onClose,
+  theme,
+}: {
+  dose: VaccinationCardEntry;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+        <View
+          style={{
+            backgroundColor: theme.colors.surface,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 20,
+            maxHeight: "85%",
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: "700", color: theme.colors.textPrimary }}>
+                {dose.immunobiologicName}
+              </Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 }}>{dose.doseLabel}</Text>
+            </View>
+            <Pressable onPress={onClose}>
+              <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          <View style={{ gap: 10 }}>
+            <DetailRow label="Status" value={STATUS_LABEL[dose.status]} theme={theme} />
+            {dose.status === "administered" ? (
+              <>
+                <DetailRow label="Data da aplicação" value={formatDate(dose.administeredAt)} theme={theme} />
+                <DetailRow label="Unidade de saúde" value={dose.administeredAtHealthUnit} theme={theme} />
+                <DetailRow label="Profissional" value={dose.administeredByProfessional} theme={theme} />
+              </>
+            ) : (
+              <DetailRow label="Data prevista" value={formatDate(dose.dueDate)} theme={theme} />
+            )}
+            <DetailRow label="Fonte dos dados" value={SOURCE_LABEL[dose.sourceSystem]} theme={theme} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function VaccinationScreen(): ReactElement {
   const { data, isLoading, error } = useMeQuery<VaccinationCardResponse>("vaccination-card");
   const theme = useTheme();
   const styles = createStyles(theme);
   const [activeStatuses, setActiveStatuses] = useState<Set<VaccinationCardEntry["status"]>>(new Set(ALL_STATUSES));
+  const [selected, setSelected] = useState<VaccinationCardEntry | null>(null);
 
   const statusColor: Record<VaccinationCardEntry["status"], string> = {
     administered: theme.colors.success,
@@ -93,7 +173,11 @@ export function VaccinationScreen(): ReactElement {
               <Text style={styles.sectionTitle}>{immunoName}</Text>
               <View style={styles.grid}>
                 {doses.map((dose) => (
-                  <View key={dose.id} style={[styles.card, { borderLeftColor: statusColor[dose.status] }]}>
+                  <Pressable
+                    key={dose.id}
+                    onPress={() => setSelected(dose)}
+                    style={[styles.card, { borderLeftColor: statusColor[dose.status] }]}
+                  >
                     <Text style={styles.doseLabel} numberOfLines={2}>
                       {dose.doseLabel}
                     </Text>
@@ -114,13 +198,14 @@ export function VaccinationScreen(): ReactElement {
                     ) : (
                       <Text style={styles.cardDetail}>{formatDate(dose.dueDate)}</Text>
                     )}
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             </View>
           ))}
         </ScrollView>
       )}
+      {selected && <DoseDetailModal dose={selected} onClose={() => setSelected(null)} theme={theme} />}
     </SafeAreaView>
   );
 }

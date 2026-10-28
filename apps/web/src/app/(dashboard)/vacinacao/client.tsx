@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { VaccinationCardEntry, VaccinationCardResponse } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { PageHeader } from "@/components/page-header";
@@ -11,6 +12,11 @@ const STATUS_LABEL: Record<VaccinationCardEntry["status"], string> = {
   administered: "Tomada",
   late: "Atrasada",
   upcoming: "Futura",
+};
+
+const SOURCE_LABEL: Record<VaccinationCardEntry["sourceSystem"], string> = {
+  "sistema-is": "Sistema IS",
+  "esus-pec": "e-SUS PEC",
 };
 
 const ALL_STATUSES = Object.keys(STATUS_LABEL) as VaccinationCardEntry["status"][];
@@ -48,9 +54,54 @@ function groupByImmunobiologic(entries: VaccinationCardEntry[]): [string, Vaccin
   return [...groups.entries()];
 }
 
+function DoseDetailModal({ dose, onClose }: { dose: VaccinationCardEntry; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div
+        className="bg-surface rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-bold pr-4">{dose.immunobiologicName}</h2>
+            <p className="text-sm text-text-secondary">{dose.doseLabel}</p>
+          </div>
+          <button onClick={onClose} className="text-text-secondary shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="text-sm space-y-2">
+          <DetailRow label="Status" value={STATUS_LABEL[dose.status]} />
+          {dose.status === "administered" ? (
+            <>
+              <DetailRow label="Data da aplicação" value={formatDate(dose.administeredAt)} />
+              <DetailRow label="Unidade de saúde" value={dose.administeredAtHealthUnit} />
+              <DetailRow label="Profissional" value={dose.administeredByProfessional} />
+            </>
+          ) : (
+            <DetailRow label="Data prevista" value={formatDate(dose.dueDate)} />
+          )}
+          <DetailRow label="Fonte dos dados" value={SOURCE_LABEL[dose.sourceSystem]} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-black/5 pb-2">
+      <span className="text-text-secondary">{label}</span>
+      <span className="font-medium text-right">{value ?? "Não informado"}</span>
+    </div>
+  );
+}
+
 export function VaccinationPageClient() {
   const { data, isLoading, error } = useMeQuery<VaccinationCardResponse>("vaccination-card");
   const [activeStatuses, setActiveStatuses] = useState<Set<VaccinationCardEntry["status"]>>(new Set(ALL_STATUSES));
+  const [selected, setSelected] = useState<VaccinationCardEntry | null>(null);
 
   function toggleStatus(status: VaccinationCardEntry["status"]) {
     setActiveStatuses((prev) => {
@@ -104,7 +155,11 @@ export function VaccinationPageClient() {
             <h2 className="text-sm font-bold">{immunoName}</h2>
             <div className="grid grid-cols-3 gap-3">
               {doses.map((dose) => (
-                <Card key={dose.id} className={`p-3 border-l-4 ${STATUS_BORDER[dose.status]} space-y-1.5`}>
+                <Card
+                  key={dose.id}
+                  onClick={() => setSelected(dose)}
+                  className={`p-3 border-l-4 ${STATUS_BORDER[dose.status]} space-y-1.5 cursor-pointer hover:shadow-md transition-shadow`}
+                >
                   <p className="text-sm font-medium leading-tight">{dose.doseLabel}</p>
                   {dose.status === "administered" ? (
                     <div className="text-xs text-text-secondary space-y-0.5">
@@ -123,6 +178,7 @@ export function VaccinationPageClient() {
           </section>
         ))}
       </div>
+      {selected && <DoseDetailModal dose={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }
