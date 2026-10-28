@@ -613,6 +613,10 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * customizações. Confirme os nomes de coluna antes de considerar isso
    * definitivo — em especial `nu_telefone_celular`/`nu_telefone_contato`
    * (o nome pode variar) e se `ds_email` de fato existe nesta instalação.
+   *
+   * Compara só os últimos 11 dígitos dos dois lados — mesmo motivo do
+   * Sistema IS (ver `SistemaIsRepository.findIdentityCandidatesByContact`):
+   * telefone às vezes salvo com DDI, paciente digita sem.
    */
   async findIdentityCandidatesByContact(contact: string): Promise<IdentityCandidate[]> {
     const digits = contact.replace(/\D/g, "");
@@ -623,8 +627,8 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         ? `SELECT co_seq_cidadao, no_cidadao FROM public.tb_cidadao WHERE lower(ds_email) = lower($1) AND st_ativo = 1`
         : `SELECT co_seq_cidadao, no_cidadao FROM public.tb_cidadao
            WHERE st_ativo = 1 AND (
-             regexp_replace(coalesce(nu_telefone_celular, ''), '\\D', '', 'g') = $1
-             OR regexp_replace(coalesce(nu_telefone_contato, ''), '\\D', '', 'g') = $1
+             RIGHT(regexp_replace(coalesce(nu_telefone_celular, ''), '\\D', '', 'g'), 11) = RIGHT($1, 11)
+             OR RIGHT(regexp_replace(coalesce(nu_telefone_contato, ''), '\\D', '', 'g'), 11) = RIGHT($1, 11)
            )`,
       [isEmail ? contact : digits],
     );

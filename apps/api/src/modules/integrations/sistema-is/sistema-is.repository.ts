@@ -149,6 +149,13 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
    * `cdg_interveniente` (profissionais) via `fkinterveniente` — por isso o
    * filtro `fkpaciente IS NOT NULL`, para nunca casar contato de um
    * profissional com uma busca de paciente.
+   *
+   * Compara só os últimos 11 dígitos (DDD + número) dos dois lados —
+   * `celular1`/`celular2` às vezes vêm com DDI ("+5585999360010") e o
+   * paciente normalmente digita sem ("85999360010"); comparar o número
+   * inteiro deixava de achar o cadastro sempre que o DDI estava salvo.
+   * `RIGHT` com um número maior que o tamanho da string devolve a string
+   * inteira, então fixo/sem o 9º dígito (10 dígitos) continua funcionando.
    */
   async findIdentityCandidatesByContact(contact: string): Promise<IdentityCandidate[]> {
     const digits = contact.replace(/\D/g, "");
@@ -165,8 +172,8 @@ export class SistemaIsRepository implements PatientSourceRepository, OnModuleDes
            FROM sotech.cdg_contato c
            INNER JOIN sotech.cdg_paciente p ON p.pkpaciente = c.fkpaciente
            WHERE c.ativo = true AND p.ativo = true AND c.fkpaciente IS NOT NULL AND (
-             regexp_replace(coalesce(c.celular1, ''), '\\D', '', 'g') = $1
-             OR regexp_replace(coalesce(c.celular2, ''), '\\D', '', 'g') = $1
+             RIGHT(regexp_replace(coalesce(c.celular1, ''), '\\D', '', 'g'), 11) = RIGHT($1, 11)
+             OR RIGHT(regexp_replace(coalesce(c.celular2, ''), '\\D', '', 'g'), 11) = RIGHT($1, 11)
            )`,
       [isEmail ? contact : digits],
     );
