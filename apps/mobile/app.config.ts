@@ -33,10 +33,19 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     version: "1.0.0",
     orientation: "portrait",
     icon: theme.branding.iconUrl,
-    splash: {
-      image: theme.branding.splashUrl,
-      backgroundColor: theme.colors.background,
-    },
+    // SDK 57 removeu `splash` do topo do config — vira config do plugin
+    // `expo-splash-screen` (precisa estar em "dependencies", não só no
+    // `expo` em si).
+    plugins: [
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          image: theme.branding.splashUrl,
+          backgroundColor: theme.colors.background,
+        },
+      ],
+    ],
     ios: {
       bundleIdentifier: theme.mobile.iosBundleId,
       supportsTablet: false,
