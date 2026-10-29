@@ -52,7 +52,7 @@ export default function AlertsPage() {
                   <p className="font-medium text-sm">{alert.title}</p>
                   <Badge tone={tone}>{PRIORITY_LABEL[alert.priority]}</Badge>
                 </div>
-                <p className="text-xs text-text-secondary">{alert.message}</p>
+                <p className="text-xs text-text-secondary whitespace-pre-line">{alert.message}</p>
               </div>
             </Card>
           );

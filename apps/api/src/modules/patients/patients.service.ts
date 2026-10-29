@@ -52,11 +52,14 @@ export class PatientsService {
     const link = await this.requireLink(userId);
     const repo = this.repositoryFor(link.sourceSystem);
 
-    const [appointments, attendances, documents] = await Promise.all([
+    const [appointments, attendances, documents, profile, cns] = await Promise.all([
       repo.findAppointmentsByPatient(link.sourcePatientId),
       repo.findAttendancesByPatient(link.sourcePatientId),
       repo.findDocumentsByPatient(link.sourcePatientId),
+      repo.getIdentityProfile(link.sourcePatientId),
+      repo.getPatientCns(link.sourcePatientId),
     ]);
+    const tableAlerts = await this.tables.findAlertsByPatient(profile?.cpf ?? null, cns);
 
     await this.logRead(tenantId, userId, "patients.dashboard.read", ip);
 
@@ -64,9 +67,10 @@ export class PatientsService {
       appointmentsCount: appointments.filter((a) => a.status === "scheduled").length,
       attendancesCount: attendances.length,
       documentsCount: documents.length,
-      // TODO(db-mapping): alertas hoje são derivados de agendamentos
-      // próximos; avaliar se o Sistema IS/e-SUS PEC expõe alertas nativos.
-      alertsCount: appointments.filter((a) => isUpcoming(a.scheduledAt)).length,
+      // Mesmo critério de getAlerts: lembretes de agendamento próximo (só
+      // "scheduled" + dentro da janela de getAppointments.isUpcoming) +
+      // alertas reais de mensagens.msg_alerta (base "Tables").
+      alertsCount: appointments.filter((a) => a.status === "scheduled" && isUpcoming(a.scheduledAt)).length + tableAlerts.length,
     };
   }
 

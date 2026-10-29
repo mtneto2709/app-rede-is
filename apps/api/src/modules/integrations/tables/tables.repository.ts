@@ -72,7 +72,12 @@ export class TablesRepository implements OnModuleDestroy {
         .map((row) => ({
           id: `table-alert:${row.pkalerta}`,
           title: row.tipoalerta ?? "Alerta",
-          message: row.mensagem,
+          // Quem cadastra a mensagem não tem como digitar uma quebra de
+          // linha real pelos clientes de banco usados — digitam "\n"
+          // literal (barra invertida + n). Convertemos pra quebra de linha
+          // de verdade aqui; os apps (web/mobile) só precisam saber exibir
+          // \n normalmente.
+          message: row.mensagem.replace(/\\n/g, "\n"),
           type: classifyAlertType(row.tipoalerta),
           createdAt: row.validade ? new Date(row.validade).toISOString() : new Date().toISOString(),
         }));
