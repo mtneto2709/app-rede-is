@@ -119,7 +119,7 @@ export function DashboardHome({
                   <Skeleton className="h-9 w-12" />
                 ) : (
                   <div className={`text-3xl font-black leading-none ${TONE_TEXT[item.tone]}`}>
-                    {String(stats?.[item.key] ?? 0).padStart(2, "0")}
+                    {stats?.[item.key] ?? 0}
                   </div>
                 )}
               </div>

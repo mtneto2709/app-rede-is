@@ -75,7 +75,7 @@ export function DashboardScreen() {
                   <View style={[styles.gridIcon, { backgroundColor: withAlpha(color, "1A") }]}>
                     <Ionicons name={item.icon} size={18} color={color} />
                   </View>
-                  <Text style={[styles.gridCount, { color }]}>{String(stats?.[item.key] ?? 0).padStart(2, "0")}</Text>
+                  <Text style={[styles.gridCount, { color }]}>{stats?.[item.key] ?? 0}</Text>
                 </View>
                 <Text style={styles.gridLabel}>{item.label}</Text>
               </Pressable>
