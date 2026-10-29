@@ -2,14 +2,15 @@ import { Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
 import { getTablesConnectionConfig, type Env } from "@rede-is/config";
 import { ENV } from "../../../common/env/env.module";
 import { ReadOnlyPool } from "../../../common/database/read-only-pool";
-import { classifyAlertType } from "../../../common/utils/alert-classification";
+import { classifyAlertType, classifyAlertPriority } from "../../../common/utils/alert-classification";
 
-/** Um alerta vindo de `mensagens.msg_alerta` — ainda sem `patientId`/`priority`/`isRead`, que `PatientsService` preenche. */
+/** Um alerta vindo de `mensagens.msg_alerta` — ainda sem `patientId`/`isRead`, que `PatientsService` preenche. */
 export interface TableAlert {
   id: string;
   title: string;
   message: string;
   type: "medication" | "appointment" | "vaccine" | "exam" | "other";
+  priority: "low" | "medium" | "high";
   createdAt: string;
 }
 
@@ -38,11 +39,11 @@ export class TablesRepository implements OnModuleDestroy {
    * garantir que sempre chegam sem máscara dos dois lados). `ativo = true`
    * filtra os desativados; ordena por `pkalerta` decrescente, como pedido.
    *
-   * `validade` não é literalmente uma data de criação (é a validade da
-   * mensagem) — não existe coluna de criação na tabela. Usada como
-   * `createdAt` só porque `Alert.createdAt` é obrigatório no contrato
-   * compartilhado e não há opção melhor; hoje nenhuma tela exibe esse
-   * campo pros alertas desta fonte.
+   * `registro` (data/hora de criação) e `prioridade` ('Baixa'/'Média'/
+   * 'Alta') foram adicionadas depois — `classifyAlertPriority` mapeia pro
+   * enum do app. `validade` continua como fallback de `createdAt` só pra
+   * linhas antigas que ficaram com `registro` nulo (coluna adicionada
+   * depois, sem backfill garantido).
    */
   async findAlertsByPatient(cpf: string | null, cns: string | null): Promise<TableAlert[]> {
     const cpfDigits = cpf?.replace(/\D/g, "") || null;
@@ -57,9 +58,11 @@ export class TablesRepository implements OnModuleDestroy {
         pkalerta: string;
         mensagem: string | null;
         validade: string | null;
+        registro: string | null;
+        prioridade: string | null;
         tipoalerta: string | null;
       }>(
-        `SELECT a.pkalerta::text AS pkalerta, a.mensagem, a.validade, t.tipoalerta
+        `SELECT a.pkalerta::text AS pkalerta, a.mensagem, a.validade, a.registro, a.prioridade, t.tipoalerta
          FROM mensagens.msg_alerta a
          LEFT JOIN mensagens.msg_tipoalerta t ON t.pktipoalerta = a.fktipoalerta
          WHERE a.ativo = true AND regexp_replace(coalesce(a.${column}, ''), '\\D', '', 'g') = $1
@@ -79,7 +82,12 @@ export class TablesRepository implements OnModuleDestroy {
           // \n normalmente.
           message: row.mensagem.replace(/\\n/g, "\n"),
           type: classifyAlertType(row.tipoalerta),
-          createdAt: row.validade ? new Date(row.validade).toISOString() : new Date().toISOString(),
+          priority: classifyAlertPriority(row.prioridade),
+          createdAt: row.registro
+            ? new Date(row.registro).toISOString()
+            : row.validade
+              ? new Date(row.validade).toISOString()
+              : new Date().toISOString(),
         }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

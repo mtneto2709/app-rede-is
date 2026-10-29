@@ -131,7 +131,6 @@ export class PatientsService {
     const messageAlerts: Alert[] = tableAlerts.map((alert) => ({
       ...alert,
       patientId: link.sourcePatientId,
-      priority: "medium" as const,
       isRead: false,
     }));
 
