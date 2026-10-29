@@ -190,7 +190,8 @@ export const Alert = z.object({
   patientId: z.string(),
   title: z.string(),
   message: z.string(),
-  type: z.enum(["medication", "appointment", "vaccine", "exam"]),
+  /** `other` cobre alertas da base "Tables" (mensagens.msg_alerta) cujo tipo não bate com nenhum dos quatro conhecidos. */
+  type: z.enum(["medication", "appointment", "vaccine", "exam", "other"]),
   priority: z.enum(["low", "medium", "high"]),
   isRead: z.boolean(),
   createdAt: z.string(),

@@ -30,7 +30,25 @@ ESUS_PEC_DB_SSL=true
 ESUS_PEC_DB_SCHEMA=
 ```
 
-## 3. Banco de controle (próprio, leitura e escrita)
+## 3. Tables — mensagens/alertas (leitura, fixa pra todos os clientes)
+
+Ao contrário do Sistema IS e do e-SUS PEC (uma base por cliente/instância),
+esta base é **fixa e compartilhada** por todas as instâncias/clientes da
+aplicação — mesma configuração de conexão independente do tenant. Hoje só
+tem a tabela `mensagens.msg_alerta`, usada pra trazer os alertas reais na
+seção Alertas (busca por CPF ou, na falta dele, por CNS).
+
+```
+TABLES_DB_HOST=
+TABLES_DB_PORT=
+TABLES_DB_NAME=
+TABLES_DB_USER=              # usuário com permissão apenas de SELECT
+TABLES_DB_PASSWORD=
+TABLES_DB_SSL=true
+TABLES_DB_SCHEMA=            # se aplicável
+```
+
+## 4. Banco de controle (próprio, leitura e escrita)
 
 Ao contrário das duas bases acima, esta é uma **URL única** — é o formato
 que o Prisma CLI (`db push`/`migrate`/`db seed`) exige via
@@ -46,7 +64,7 @@ Se a senha tiver caracteres especiais (`@`, `:`, `/`, etc.), faça
 [URL-encode](https://www.urlencoder.org/) só da senha antes de montar a
 URL.
 
-## 4. Autenticação
+## 5. Autenticação
 
 ```
 JWT_ACCESS_SECRET=
@@ -83,7 +101,7 @@ AUTH_DEV_FORCE_OTP_PHONE=    # ex: 85999360010 — redireciona todo SMS/WhatsApp
 AUTH_DEV_ALWAYS_PASS_QUESTIONNAIRE=false  # true = aprova o questionário de 1o acesso mesmo com respostas erradas
 ```
 
-## 5. Aplicação / infraestrutura
+## 6. Aplicação / infraestrutura
 
 ```
 NODE_ENV=production
@@ -96,7 +114,7 @@ RATE_LIMIT_MAX=60
 SENTRY_DSN=                  # observabilidade/erro (opcional)
 ```
 
-## 6. Mobile (build-time, por cliente)
+## 7. Mobile (build-time, por cliente)
 
 Definidas em `clients/<slug>/.env` e injetadas no `app.config.ts` via
 EAS Build (não em runtime — cada binário é fixo para um tenant):

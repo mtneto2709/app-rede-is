@@ -1,0 +1,89 @@
+import { Inject, Injectable, Logger, OnModuleDestroy } from "@nestjs/common";
+import { getTablesConnectionConfig, type Env } from "@rede-is/config";
+import { ENV } from "../../../common/env/env.module";
+import { ReadOnlyPool } from "../../../common/database/read-only-pool";
+import { classifyAlertType } from "../../../common/utils/alert-classification";
+
+/** Um alerta vindo de `mensagens.msg_alerta` — ainda sem `patientId`/`priority`/`isRead`, que `PatientsService` preenche. */
+export interface TableAlert {
+  id: string;
+  title: string;
+  message: string;
+  type: "medication" | "appointment" | "vaccine" | "exam" | "other";
+  createdAt: string;
+}
+
+/**
+ * Repositório da base "Tables" — CONFIRMADO via DDL real que o cliente
+ * passou. Diferente de Sistema IS/e-SUS PEC (uma base por cliente), essa é
+ * uma base FIXA e ÚNICA, compartilhada por todas as instâncias/clientes da
+ * aplicação (configurada em `TABLES_DB_*`).
+ */
+@Injectable()
+export class TablesRepository implements OnModuleDestroy {
+  private readonly logger = new Logger(TablesRepository.name);
+  private readonly pool: ReadOnlyPool;
+
+  constructor(@Inject(ENV) env: Env) {
+    this.pool = new ReadOnlyPool(getTablesConnectionConfig(env));
+  }
+
+  /**
+   * `mensagens.msg_alerta` (CONFIRMADO via DDL) + `mensagens.msg_tipoalerta`
+   * (pro título/classificação do tipo). Busca por CPF; só cai pra CNS se o
+   * paciente não tiver CPF cadastrado na base de origem — nunca os dois
+   * juntos, como pedido pelo cliente. Compara só dígitos dos dois lados
+   * (mesmo cuidado do fix de telefone/CPF com máscara nas outras buscas
+   * desta base — `cpf`/`cns` são `char(N)` de largura fixa, mas não dá pra
+   * garantir que sempre chegam sem máscara dos dois lados). `ativo = true`
+   * filtra os desativados; ordena por `pkalerta` decrescente, como pedido.
+   *
+   * `validade` não é literalmente uma data de criação (é a validade da
+   * mensagem) — não existe coluna de criação na tabela. Usada como
+   * `createdAt` só porque `Alert.createdAt` é obrigatório no contrato
+   * compartilhado e não há opção melhor; hoje nenhuma tela exibe esse
+   * campo pros alertas desta fonte.
+   */
+  async findAlertsByPatient(cpf: string | null, cns: string | null): Promise<TableAlert[]> {
+    const cpfDigits = cpf?.replace(/\D/g, "") || null;
+    const cnsDigits = cns?.replace(/\D/g, "") || null;
+
+    const column = cpfDigits ? "cpf" : cnsDigits ? "cns" : null;
+    const value = cpfDigits ?? cnsDigits;
+    if (!column || !value) return [];
+
+    try {
+      const rows = await this.pool.query<{
+        pkalerta: string;
+        mensagem: string | null;
+        validade: string | null;
+        tipoalerta: string | null;
+      }>(
+        `SELECT a.pkalerta::text AS pkalerta, a.mensagem, a.validade, t.tipoalerta
+         FROM mensagens.msg_alerta a
+         LEFT JOIN mensagens.msg_tipoalerta t ON t.pktipoalerta = a.fktipoalerta
+         WHERE a.ativo = true AND regexp_replace(coalesce(a.${column}, ''), '\\D', '', 'g') = $1
+         ORDER BY a.pkalerta DESC`,
+        [value],
+      );
+
+      return rows
+        .filter((row): row is typeof row & { mensagem: string } => !!row.mensagem)
+        .map((row) => ({
+          id: `table-alert:${row.pkalerta}`,
+          title: row.tipoalerta ?? "Alerta",
+          message: row.mensagem,
+          type: classifyAlertType(row.tipoalerta),
+          createdAt: row.validade ? new Date(row.validade).toISOString() : new Date().toISOString(),
+        }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Falha ao buscar alertas (mensagens.msg_alerta): ${message}`);
+      return [];
+    }
+  }
+
+  async onModuleDestroy() {
+    await this.pool.close();
+  }
+}

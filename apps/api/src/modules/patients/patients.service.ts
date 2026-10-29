@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type {
+  Alert,
   DashboardStats,
   HealthSummary,
   PatientProfileSummary,
@@ -13,6 +14,7 @@ import {
   type AdministeredVaccine,
   type VaccinationCalendarSlot,
 } from "../integrations/esus-pec/esus-pec.repository";
+import { TablesRepository } from "../integrations/tables/tables.repository";
 import { VaccinationService } from "./vaccination.service";
 import type { PatientSourceRepository } from "../../common/database/patient-source-repository.interface";
 
@@ -25,6 +27,7 @@ export class PatientsService {
     private readonly audit: AuditService,
     private readonly sistemaIs: SistemaIsRepository,
     private readonly esusPec: EsusPecRepository,
+    private readonly tables: TablesRepository,
     private readonly vaccination: VaccinationService,
   ) {}
 
@@ -88,10 +91,26 @@ export class PatientsService {
     return result;
   }
 
-  /** Alertas simples derivados de agendamentos próximos (não persistidos). */
-  async getAlerts(tenantId: string, userId: string, ip?: string) {
-    const appointments = await this.getAppointments(tenantId, userId, ip);
-    return appointments
+  /**
+   * Alertas combinam dois tipos de fonte: lembretes sintéticos de agendamentos
+   * próximos (não persistidos, como já era) + alertas reais de
+   * `mensagens.msg_alerta` (base "Tables", fixa pra todos os clientes),
+   * buscados por CPF ou, na falta dele, por CNS — nunca os dois junto, como
+   * pedido. O CPF/CNS vêm do cadastro de origem (Sistema IS ou e-SUS PEC,
+   * dependendo de onde o vínculo do usuário aponta), igual a
+   * `getProfileSummary`.
+   */
+  async getAlerts(tenantId: string, userId: string, ip?: string): Promise<Alert[]> {
+    const link = await this.requireLink(userId);
+    const repo = this.repositoryFor(link.sourceSystem);
+
+    const [appointments, profile, cns] = await Promise.all([
+      this.getAppointments(tenantId, userId, ip),
+      repo.getIdentityProfile(link.sourcePatientId),
+      repo.getPatientCns(link.sourcePatientId),
+    ]);
+
+    const appointmentAlerts: Alert[] = appointments
       .filter((a) => a.status === "scheduled" && isUpcoming(a.scheduledAt))
       .map((a) => ({
         id: `appointment-reminder:${a.id}`,
@@ -103,6 +122,17 @@ export class PatientsService {
         isRead: false,
         createdAt: new Date().toISOString(),
       }));
+
+    const tableAlerts = await this.tables.findAlertsByPatient(profile?.cpf ?? null, cns);
+    const messageAlerts: Alert[] = tableAlerts.map((alert) => ({
+      ...alert,
+      patientId: link.sourcePatientId,
+      priority: "medium" as const,
+      isRead: false,
+    }));
+
+    await this.logRead(tenantId, userId, "patients.alerts.read", ip);
+    return [...messageAlerts, ...appointmentAlerts];
   }
 
   async getHealthUnits(tenantId: string, userId: string, ip?: string) {

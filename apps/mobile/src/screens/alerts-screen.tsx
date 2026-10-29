@@ -11,6 +11,7 @@ const TYPE_ICON: Record<Alert["type"], keyof typeof Ionicons.glyphMap> = {
   appointment: "calendar-outline",
   vaccine: "bandage-outline",
   exam: "document-text-outline",
+  other: "notifications-outline",
 };
 
 const PRIORITY_LABEL: Record<Alert["priority"], string> = {

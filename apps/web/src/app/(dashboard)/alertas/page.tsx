@@ -1,6 +1,6 @@
 "use client";
 
-import { Pill, Calendar, Syringe, FileText, type LucideIcon } from "lucide-react";
+import { Pill, Calendar, Syringe, FileText, Bell, type LucideIcon } from "lucide-react";
 import type { Alert } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { PageHeader } from "@/components/page-header";
@@ -26,6 +26,7 @@ const TYPE_ICON: Record<Alert["type"], LucideIcon> = {
   appointment: Calendar,
   vaccine: Syringe,
   exam: FileText,
+  other: Bell,
 };
 
 export default function AlertsPage() {

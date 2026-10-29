@@ -35,3 +35,20 @@ export function getEsusPecConnectionConfig(env: Env): DatabaseConnectionConfig {
     schema: env.ESUS_PEC_DB_SCHEMA,
   };
 }
+
+/**
+ * Configuração de conexão somente-leitura pra base "Tables" — fixa,
+ * compartilhada por todos os clientes/instâncias (não é uma base por
+ * cliente como Sistema IS/e-SUS PEC).
+ */
+export function getTablesConnectionConfig(env: Env): DatabaseConnectionConfig {
+  return {
+    host: env.TABLES_DB_HOST,
+    port: env.TABLES_DB_PORT,
+    database: env.TABLES_DB_NAME,
+    user: env.TABLES_DB_USER,
+    password: env.TABLES_DB_PASSWORD,
+    ssl: env.TABLES_DB_SSL,
+    schema: env.TABLES_DB_SCHEMA,
+  };
+}

@@ -34,6 +34,18 @@ export const envSchema = z
     ESUS_PEC_DB_SSL: boolFromString.default("true"),
     ESUS_PEC_DB_SCHEMA: z.string().default("public"),
 
+    // Tables (somente leitura) — base fixa, compartilhada por todos os
+    // clientes/instâncias (ao contrário de Sistema IS/e-SUS PEC, que são
+    // uma base por cliente). Hoje só tem mensagens.msg_alerta, usada pra
+    // Alertas — ver TablesRepository.
+    TABLES_DB_HOST: z.string().min(1),
+    TABLES_DB_PORT: z.coerce.number().int().positive(),
+    TABLES_DB_NAME: z.string().min(1),
+    TABLES_DB_USER: z.string().min(1),
+    TABLES_DB_PASSWORD: z.string().min(1),
+    TABLES_DB_SSL: boolFromString.default("true"),
+    TABLES_DB_SCHEMA: z.string().default("public"),
+
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     API_PORT: z.coerce.number().int().positive().default(3000),
     API_BASE_URL: z.string().url(),
