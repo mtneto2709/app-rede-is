@@ -644,8 +644,13 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    *
    * Nome do procedimento via catálogo `tb_proced` — tabela e
    * relacionamento (`co_proced`) reais (FK confirmada no DDL), nome da
-   * coluna de rótulo (`no_proced`) é chute por convenção (mesmo padrão já
-   * usado pra `no_medicamento`/`no_cid10`/etc). `ds_resultado`/
+   * coluna de rótulo (`no_proced`) confirmada em teste real. BUG REAL já
+   * visto em produção: `tb_proced.co_proced` é `character varying`
+   * (provável código SIGTAP), não `bigint` como o resto da cadeia — o
+   * join sem cast quebrava a query inteira ("operator does not exist:
+   * character varying = bigint"), derrubando a busca de exames inteira
+   * silenciosamente (capturada pelo catch abaixo). Por isso o join casta
+   * os dois lados pra `text` em vez de comparar direto. `ds_resultado`/
    * `ds_observacao` passam por `htmlToText` por precaução (mesmo tipo de
    * campo livre que já veio com HTML cru em `tb_atestado.ds_atestado`).
    * Fora de escopo por ora (exigiriam adivinhar coluna em catálogo sem
@@ -677,7 +682,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
                 prof_res.no_civil_profissional AS no_civil_profissional_res, cbo_res.no_cbo AS no_cbo_res
          FROM public.tb_exame_requisitado er
          INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = er.co_prontuario
-         LEFT JOIN public.tb_proced proc ON proc.co_proced = er.co_proced
+         LEFT JOIN public.tb_proced proc ON proc.co_proced::text = er.co_proced::text
          LEFT JOIN public.tb_atend_prof ap_sol ON ap_sol.co_seq_atend_prof = er.co_atend_prof_solicitacao
          LEFT JOIN public.tb_lotacao l_sol ON l_sol.co_ator_papel = ap_sol.co_lotacao
          LEFT JOIN public.tb_prof prof_sol ON prof_sol.co_seq_prof = l_sol.co_prof
