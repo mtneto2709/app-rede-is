@@ -661,22 +661,18 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * diferir entre exames da mesma requisição; o card da requisição é só
    * um resumo, o detalhe por exame fica nos itens.
    *
-   * Nome do procedimento via catálogo `tb_proced` — tabela e
-   * relacionamento (`co_proced`) reais (FK confirmada no DDL), nome da
-   * coluna de rótulo (`no_proced`) confirmada em teste real. BUG REAL já
-   * visto em produção: `tb_proced.co_proced` é `character varying`
-   * (provável código SIGTAP), não `bigint` como o resto da cadeia — o
-   * join sem cast quebrava a query inteira ("operator does not exist:
-   * character varying = bigint"), derrubando a busca de exames inteira
-   * silenciosamente (capturada pelo catch abaixo). SEGUNDO BUG REAL, visto
-   * depois do cast: comparar como `::text` ainda não casava nenhuma linha
-   * ("Exame não identificado" sempre) — código SIGTAP é zero-padded (ex.
-   * `"0202010406"`) em `tb_proced.co_proced` (varchar), enquanto
-   * `tb_exame_requisitado.co_proced` (bigint) não tem zero à esquerda
-   * (`202010406`), então o `::text` dos dois nunca batia. Corrigido
-   * comparando como `::bigint` dos dois lados (valor numérico, ignora
-   * zero à esquerda) — com guarda via regex pra não quebrar a query se
-   * algum código do catálogo não for puramente numérico.
+   * Nome do procedimento via catálogo `tb_proced`. TERCEIRO BUG REAL no
+   * mesmo join, agora confirmado pelo cliente como causa raiz dos dois
+   * anteriores: `tb_exame_requisitado.co_proced` é FK de
+   * `tb_proced.co_seq_proced` (o PK real da tabela), e NÃO de
+   * `tb_proced.co_proced` — essa segunda coluna só guarda o código do
+   * procedimento no e-SUS/SIGTAP (um dado de negócio, não a chave de
+   * ligação). Os dois "fixes" anteriores (cast de tipo, depois cast
+   * numérico pra ignorar zero à esquerda) eram tentativas de fazer o
+   * valor de `co_proced` baterem em ambas as tabelas, mas a premissa
+   * estava errada desde o início — a ligação nunca foi por `co_proced`
+   * dos dois lados. Corrigido o join pra `tb_proced.co_seq_proced`.
+   * `no_proced` como coluna de rótulo continua confirmado em teste real.
    *
    * Resultado estruturado: além do texto livre `ds_resultado`, o e-SUS
    * grava o valor de alguns tipos de exame em tabelas próprias de
@@ -735,8 +731,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
                 ) AS vl_resultado_estruturado
          FROM public.tb_exame_requisitado er
          INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = er.co_prontuario
-         LEFT JOIN public.tb_proced proc
-           ON proc.co_proced ~ '^[0-9]+$' AND proc.co_proced::bigint = er.co_proced::bigint
+         LEFT JOIN public.tb_proced proc ON proc.co_seq_proced = er.co_proced
          LEFT JOIN public.tb_atend_prof ap_sol ON ap_sol.co_seq_atend_prof = er.co_atend_prof_solicitacao
          LEFT JOIN public.tb_lotacao l_sol ON l_sol.co_ator_papel = ap_sol.co_lotacao
          LEFT JOIN public.tb_prof prof_sol ON prof_sol.co_seq_prof = l_sol.co_prof
