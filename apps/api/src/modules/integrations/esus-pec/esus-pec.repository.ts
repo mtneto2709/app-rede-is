@@ -6,6 +6,7 @@ import type {
   Attendance,
   ContinuousMedication,
   Document,
+  ExamRequisitionItem,
   HealthCondition,
   HealthUnit,
   Patient,
@@ -297,13 +298,14 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    *    continua sendo chute.
    */
   async findDocumentsByPatient(patientId: string): Promise<Document[]> {
-    const [certificates, prescriptions, referrals] = await Promise.all([
+    const [certificates, prescriptions, referrals, exams] = await Promise.all([
       this.findCertificateDocuments(patientId),
       this.findPrescriptionDocuments(patientId),
       this.findReferralDocuments(patientId),
+      this.findExamDocuments(patientId),
     ]);
 
-    return [...certificates, ...prescriptions, ...referrals].sort(
+    return [...certificates, ...prescriptions, ...referrals, ...exams].sort(
       (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime(),
     );
   }
@@ -370,6 +372,8 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
             healthUnitName: row.no_unidade_saude,
             professionalName: row.no_civil_profissional,
             professionalRole: row.no_cbo,
+            resultProfessionalName: null,
+            resultAt: null,
             cid10: row.no_cid10,
             daysOff: row.nu_dias,
             // ds_atestado vem com HTML cru (editor rich-text do sistema
@@ -377,6 +381,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
             // apareciam literalmente na tela.
             text: htmlToText(row.ds_atestado),
             medications: null,
+            exams: null,
           },
           sourceSystem: "esus-pec" as const,
         }));
@@ -476,11 +481,14 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
             healthUnitName: first.no_unidade_saude,
             professionalName: first.no_civil_profissional,
             professionalRole: first.no_cbo,
+            resultProfessionalName: null,
+            resultAt: null,
             cid10: null,
             daysOff: null,
             // Receita usa `medications` (um card por medicamento), não texto corrido.
             text: null,
             medications: items.map((item) => this.buildPrescriptionMedicationItem(item)),
+            exams: null,
           },
           sourceSystem: "esus-pec" as const,
         };
@@ -590,10 +598,13 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
           healthUnitName: row.no_unidade_saude,
           professionalName: row.no_civil_profissional,
           professionalRole: row.no_cbo,
+          resultProfessionalName: null,
+          resultAt: null,
           cid10: row.no_cid10,
           daysOff: null,
           text: row.ds_especialidade,
           medications: null,
+          exams: null,
         },
         sourceSystem: "esus-pec" as const,
       }));
@@ -602,6 +613,147 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       this.logger.warn(`Falha ao buscar encaminhamentos (tb_encaminhamento_externo, tabela não confirmada) de ${patientId}: ${message}`);
       return [];
     }
+  }
+
+  /**
+   * CONFIRMADO via DDL real que o cliente passou pra `tb_exame_requisitado`
+   * — cada linha é UM exame dentro de uma requisição (`co_requisicao_exame`),
+   * e pode ter até DOIS profissionais envolvidos em atendimentos
+   * diferentes: quem solicitou (`co_atend_prof_solicitacao`) e quem avaliou
+   * o resultado (`co_atend_prof_resultado`, nulo até o exame ser avaliado)
+   * — por isso dois joins separados em `tb_atend_prof`/`tb_lotacao`/
+   * `tb_prof`/`tb_cbo` (`_sol`/`_res`), em vez do `atendProfContextJoin`
+   * único usado pelos outros documentos (que só têm um profissional).
+   *
+   * O paciente é achado direto por `tb_exame_requisitado.co_prontuario`
+   * (FK própria da tabela, confirmada no DDL) — mais direto que passar
+   * por atendimento, e funciona mesmo num exame sem nenhum dos dois
+   * atend_prof preenchido ainda.
+   *
+   * Agrupado por `co_requisicao_exame` — um "documento" por requisição,
+   * com um item por exame em `content.exams` (card próprio ao abrir).
+   * Exame sem requisição (`co_requisicao_exame` nulo) vira grupo de um
+   * item só, pelo próprio `co_seq_exame_requisitado`, pra não misturar
+   * exames avulsos de pedidos diferentes sob a mesma chave nula. O card
+   * da requisição mostra o profissional/data do primeiro exame pra
+   * solicitação, e do primeiro exame COM resultado avaliado (se algum já
+   * tiver) pra avaliação — como cada exame tem seu próprio
+   * `co_atend_prof_resultado`, profissional/data podem, em teoria,
+   * diferir entre exames da mesma requisição; o card da requisição é só
+   * um resumo, o detalhe por exame fica nos itens.
+   *
+   * Nome do procedimento via catálogo `tb_proced` — tabela e
+   * relacionamento (`co_proced`) reais (FK confirmada no DDL), nome da
+   * coluna de rótulo (`no_proced`) é chute por convenção (mesmo padrão já
+   * usado pra `no_medicamento`/`no_cid10`/etc). `ds_resultado`/
+   * `ds_observacao` passam por `htmlToText` por precaução (mesmo tipo de
+   * campo livre que já veio com HTML cru em `tb_atestado.ds_atestado`).
+   * Fora de escopo por ora (exigiriam adivinhar coluna em catálogo sem
+   * DDL confirmado, ou são anexo de arquivo, não dado estruturado):
+   * `co_proced_exame_especifico`, `co_arquivo_atendprof`.
+   */
+  private async findExamDocuments(patientId: string): Promise<Document[]> {
+    try {
+      const rows = await this.pool.query<{
+        co_seq_exame_requisitado: string;
+        co_requisicao_exame: string | null;
+        st_conferido: number | null;
+        dt_solicitacao: string | null;
+        dt_realizacao: string | null;
+        dt_resultado: string | null;
+        ds_resultado: string | null;
+        ds_observacao: string | null;
+        no_proced: string | null;
+        no_civil_profissional_sol: string | null;
+        no_cbo_sol: string | null;
+        no_civil_profissional_res: string | null;
+        no_cbo_res: string | null;
+      }>(
+        `SELECT er.co_seq_exame_requisitado::text AS co_seq_exame_requisitado,
+                er.co_requisicao_exame::text AS co_requisicao_exame,
+                er.st_conferido, er.dt_solicitacao, er.dt_realizacao, er.dt_resultado,
+                er.ds_resultado, er.ds_observacao, proc.no_proced,
+                prof_sol.no_civil_profissional AS no_civil_profissional_sol, cbo_sol.no_cbo AS no_cbo_sol,
+                prof_res.no_civil_profissional AS no_civil_profissional_res, cbo_res.no_cbo AS no_cbo_res
+         FROM public.tb_exame_requisitado er
+         INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = er.co_prontuario
+         LEFT JOIN public.tb_proced proc ON proc.co_proced = er.co_proced
+         LEFT JOIN public.tb_atend_prof ap_sol ON ap_sol.co_seq_atend_prof = er.co_atend_prof_solicitacao
+         LEFT JOIN public.tb_lotacao l_sol ON l_sol.co_ator_papel = ap_sol.co_lotacao
+         LEFT JOIN public.tb_prof prof_sol ON prof_sol.co_seq_prof = l_sol.co_prof
+         LEFT JOIN public.tb_cbo cbo_sol ON cbo_sol.co_cbo = l_sol.co_cbo
+         LEFT JOIN public.tb_atend_prof ap_res ON ap_res.co_seq_atend_prof = er.co_atend_prof_resultado
+         LEFT JOIN public.tb_lotacao l_res ON l_res.co_ator_papel = ap_res.co_lotacao
+         LEFT JOIN public.tb_prof prof_res ON prof_res.co_seq_prof = l_res.co_prof
+         LEFT JOIN public.tb_cbo cbo_res ON cbo_res.co_cbo = l_res.co_cbo
+         WHERE p.co_cidadao = $1
+         ORDER BY er.co_requisicao_exame, er.co_seq_exame_requisitado`,
+        [patientId],
+      );
+
+      const byRequisition = new Map<string, typeof rows>();
+      for (const row of rows) {
+        const key = row.co_requisicao_exame ?? `single:${row.co_seq_exame_requisitado}`;
+        const list = byRequisition.get(key) ?? [];
+        list.push(row);
+        byRequisition.set(key, list);
+      }
+
+      return [...byRequisition.entries()].map(([groupKey, items]) => {
+        const first = items[0]!;
+        const withResult = items.find((item) => item.no_civil_profissional_res) ?? first;
+        return {
+          id: `exam-requisition:${groupKey}`,
+          patientId,
+          title: "Requisição de Exames",
+          type: "exam" as const,
+          issuedAt: first.dt_solicitacao ?? first.dt_realizacao ?? first.dt_resultado ?? new Date().toISOString(),
+          professionalName: first.no_civil_profissional_sol,
+          description: `${items.length} exame(s)`,
+          fileUrl: null,
+          content: {
+            healthUnitName: null,
+            professionalName: first.no_civil_profissional_sol,
+            professionalRole: first.no_cbo_sol,
+            resultProfessionalName: withResult.no_civil_profissional_res,
+            resultAt: withResult.dt_resultado,
+            cid10: null,
+            daysOff: null,
+            text: null,
+            medications: null,
+            exams: items.map((item) => this.buildExamRequisitionItem(item)),
+          },
+          sourceSystem: "esus-pec" as const,
+        };
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar exames (tb_exame_requisitado) de ${patientId}: ${message}`);
+      return [];
+    }
+  }
+
+  /** Monta um item estruturado de exame a partir dos detalhes nativos confirmados em tb_exame_requisitado. */
+  private buildExamRequisitionItem(row: {
+    co_seq_exame_requisitado: string;
+    st_conferido: number | null;
+    dt_solicitacao: string | null;
+    dt_realizacao: string | null;
+    dt_resultado: string | null;
+    ds_resultado: string | null;
+    ds_observacao: string | null;
+    no_proced: string | null;
+  }): ExamRequisitionItem {
+    return {
+      id: `exam-item:${row.co_seq_exame_requisitado}`,
+      name: row.no_proced ?? "Exame não identificado",
+      conferred: row.st_conferido == null ? null : row.st_conferido === 1,
+      requestedAt: row.dt_solicitacao,
+      performedAt: row.dt_realizacao,
+      resultAt: row.dt_resultado,
+      result: htmlToText(row.ds_resultado),
+      observation: htmlToText(row.ds_observacao),
+    };
   }
 
   /**

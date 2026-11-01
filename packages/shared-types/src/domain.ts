@@ -174,17 +174,42 @@ export const PrescriptionMedicationItem = z.object({
 });
 export type PrescriptionMedicationItem = z.infer<typeof PrescriptionMedicationItem>;
 
+/** Um exame dentro de uma requisição — cada um vira um card próprio na lista aberta ao tocar no card da requisição. */
+export const ExamRequisitionItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Situação de conferência do resultado — null quando a base não tiver essa informação (não confundir com `false`: nunca conferido ainda). */
+  conferred: z.boolean().nullable(),
+  requestedAt: z.string().nullable(),
+  performedAt: z.string().nullable(),
+  resultAt: z.string().nullable(),
+  /** Já sem tags HTML, convertido pra texto plano. */
+  result: z.string().nullable(),
+  observation: z.string().nullable(),
+});
+export type ExamRequisitionItem = z.infer<typeof ExamRequisitionItem>;
+
 export const DocumentContent = z.object({
   healthUnitName: z.string().nullable(),
   professionalName: z.string().nullable(),
   professionalRole: z.string().nullable(),
+  /**
+   * Segundo profissional/data — usado só em `type: "exam"`, pro
+   * profissional que avaliou o resultado (`professionalName` é quem
+   * solicitou). Null quando o exame ainda não tem resultado avaliado, ou
+   * pros demais tipos de documento, que só têm um profissional envolvido.
+   */
+  resultProfessionalName: z.string().nullable(),
+  resultAt: z.string().nullable(),
   cid10: z.string().nullable(),
   /** Dias de afastamento (atestado) — null quando não se aplica ao tipo de documento. */
   daysOff: z.number().nullable(),
-  /** Texto livre do documento (motivo do encaminhamento, corpo do atestado etc) — já sem tags HTML, convertido pra texto plano. Null para receita, que usa `medications` em vez disso. */
+  /** Texto livre do documento (motivo do encaminhamento, corpo do atestado etc) — já sem tags HTML, convertido pra texto plano. Null para receita/exame, que usam `medications`/`exams` em vez disso. */
   text: z.string().nullable(),
   /** Populado só pra `type: "prescription"` — um item por medicamento. Null/vazio pros demais tipos de documento. */
   medications: z.array(PrescriptionMedicationItem).nullable(),
+  /** Populado só pra `type: "exam"` — um item por exame da requisição. Null/vazio pros demais tipos de documento. */
+  exams: z.array(ExamRequisitionItem).nullable(),
 });
 export type DocumentContent = z.infer<typeof DocumentContent>;
 

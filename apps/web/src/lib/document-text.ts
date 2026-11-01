@@ -11,6 +11,10 @@ export function buildDocumentText(doc: Document): string {
   }
   if (doc.content?.cid10) lines.push(`CID10: ${doc.content.cid10}`);
   if (doc.content?.daysOff != null) lines.push(`Dias de afastamento: ${doc.content.daysOff}`);
+  if (doc.content?.resultProfessionalName) {
+    const resultDate = doc.content.resultAt ? new Date(doc.content.resultAt).toLocaleDateString("pt-BR") : "";
+    lines.push(`Avaliação: ${doc.content.resultProfessionalName}${resultDate ? ` — ${resultDate}` : ""}`);
+  }
   if (doc.content?.medications && doc.content.medications.length > 0) {
     lines.push("");
     for (const med of doc.content.medications) {
@@ -18,6 +22,18 @@ export function buildDocumentText(doc: Document): string {
       for (const extra of [med.dose, med.quantity, med.duration, med.interrupted, med.reason]) {
         if (extra) lines.push(extra);
       }
+      lines.push("");
+    }
+  } else if (doc.content?.exams && doc.content.exams.length > 0) {
+    lines.push("");
+    for (const exam of doc.content.exams) {
+      lines.push(exam.name);
+      if (exam.conferred != null) lines.push(exam.conferred ? "Conferido" : "Aguardando conferência");
+      if (exam.requestedAt) lines.push(`Solicitado em ${new Date(exam.requestedAt).toLocaleDateString("pt-BR")}`);
+      if (exam.performedAt) lines.push(`Realizado em ${new Date(exam.performedAt).toLocaleDateString("pt-BR")}`);
+      if (exam.resultAt) lines.push(`Resultado em ${new Date(exam.resultAt).toLocaleDateString("pt-BR")}`);
+      if (exam.result) lines.push(exam.result);
+      if (exam.observation) lines.push(exam.observation);
       lines.push("");
     }
   } else if (doc.content?.text) {

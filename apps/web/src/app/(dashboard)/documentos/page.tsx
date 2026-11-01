@@ -77,6 +77,12 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
           )}
           {doc.content?.cid10 && <p>CID10: {doc.content.cid10}</p>}
           {doc.content?.daysOff != null && <p>Dias de afastamento: {doc.content.daysOff}</p>}
+          {doc.content?.resultProfessionalName && (
+            <p>
+              Avaliação: {doc.content.resultProfessionalName}
+              {doc.content.resultAt ? ` — ${new Date(doc.content.resultAt).toLocaleDateString("pt-BR")}` : ""}
+            </p>
+          )}
         </div>
 
         {doc.content?.medications && doc.content.medications.length > 0 ? (
@@ -89,6 +95,38 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
                 {med.duration && <p className="text-xs text-text-secondary">{med.duration}</p>}
                 {med.interrupted && <p className="text-xs text-danger">{med.interrupted}</p>}
                 {med.reason && <p className="text-xs text-text-secondary">{med.reason}</p>}
+              </Card>
+            ))}
+          </div>
+        ) : doc.content?.exams && doc.content.exams.length > 0 ? (
+          <div className="space-y-2">
+            {doc.content.exams.map((exam) => (
+              <Card key={exam.id} className="p-3 space-y-1 border-l-4 border-l-secondary">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold">{exam.name}</p>
+                  {exam.conferred != null && (
+                    <span className={`text-[10px] font-semibold shrink-0 ${exam.conferred ? "text-success" : "text-warning"}`}>
+                      {exam.conferred ? "Conferido" : "Aguardando conferência"}
+                    </span>
+                  )}
+                </div>
+                {exam.requestedAt && (
+                  <p className="text-xs text-text-secondary">
+                    Solicitado em {new Date(exam.requestedAt).toLocaleDateString("pt-BR")}
+                  </p>
+                )}
+                {exam.performedAt && (
+                  <p className="text-xs text-text-secondary">
+                    Realizado em {new Date(exam.performedAt).toLocaleDateString("pt-BR")}
+                  </p>
+                )}
+                {exam.resultAt && (
+                  <p className="text-xs text-text-secondary">
+                    Resultado em {new Date(exam.resultAt).toLocaleDateString("pt-BR")}
+                  </p>
+                )}
+                {exam.result && <p className="text-sm whitespace-pre-wrap bg-app rounded-xl p-2 mt-1">{exam.result}</p>}
+                {exam.observation && <p className="text-xs text-text-secondary">{exam.observation}</p>}
               </Card>
             ))}
           </div>
@@ -193,6 +231,15 @@ export default function DocumentsPage() {
                   )}
                   {doc.content?.healthUnitName && (
                     <p className="text-xs text-text-secondary">{doc.content.healthUnitName}</p>
+                  )}
+                  {doc.type === "exam" && (
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      {doc.content?.resultProfessionalName
+                        ? `Avaliação: ${doc.content.resultProfessionalName} · ${
+                            doc.content.resultAt ? new Date(doc.content.resultAt).toLocaleDateString("pt-BR") : ""
+                          }`
+                        : "Aguardando avaliação"}
+                    </p>
                   )}
                 </div>
               </div>

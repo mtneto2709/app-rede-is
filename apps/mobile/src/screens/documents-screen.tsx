@@ -36,6 +36,10 @@ function buildDocumentText(doc: Document): string {
   }
   if (doc.content?.cid10) lines.push(`CID10: ${doc.content.cid10}`);
   if (doc.content?.daysOff != null) lines.push(`Dias de afastamento: ${doc.content.daysOff}`);
+  if (doc.content?.resultProfessionalName) {
+    const resultDate = doc.content.resultAt ? new Date(doc.content.resultAt).toLocaleDateString("pt-BR") : "";
+    lines.push(`Avaliação: ${doc.content.resultProfessionalName}${resultDate ? ` — ${resultDate}` : ""}`);
+  }
   if (doc.content?.medications && doc.content.medications.length > 0) {
     lines.push("");
     for (const med of doc.content.medications) {
@@ -43,6 +47,18 @@ function buildDocumentText(doc: Document): string {
       for (const extra of [med.dose, med.quantity, med.duration, med.interrupted, med.reason]) {
         if (extra) lines.push(extra);
       }
+      lines.push("");
+    }
+  } else if (doc.content?.exams && doc.content.exams.length > 0) {
+    lines.push("");
+    for (const exam of doc.content.exams) {
+      lines.push(exam.name);
+      if (exam.conferred != null) lines.push(exam.conferred ? "Conferido" : "Aguardando conferência");
+      if (exam.requestedAt) lines.push(`Solicitado em ${new Date(exam.requestedAt).toLocaleDateString("pt-BR")}`);
+      if (exam.performedAt) lines.push(`Realizado em ${new Date(exam.performedAt).toLocaleDateString("pt-BR")}`);
+      if (exam.resultAt) lines.push(`Resultado em ${new Date(exam.resultAt).toLocaleDateString("pt-BR")}`);
+      if (exam.result) lines.push(exam.result);
+      if (exam.observation) lines.push(exam.observation);
       lines.push("");
     }
   } else if (doc.content?.text) {
@@ -97,6 +113,12 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
                   Dias de afastamento: {doc.content.daysOff}
                 </Text>
               )}
+              {doc.content?.resultProfessionalName && (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                  Avaliação: {doc.content.resultProfessionalName}
+                  {doc.content.resultAt ? ` — ${new Date(doc.content.resultAt).toLocaleDateString("pt-BR")}` : ""}
+                </Text>
+              )}
             </View>
 
             {doc.content?.medications && doc.content.medications.length > 0 ? (
@@ -109,6 +131,61 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
                     {med.duration && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.duration}</Text>}
                     {med.interrupted && <Text style={{ fontSize: 12, color: theme.colors.danger }}>{med.interrupted}</Text>}
                     {med.reason && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.reason}</Text>}
+                  </Card>
+                ))}
+              </View>
+            ) : doc.content?.exams && doc.content.exams.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                {doc.content.exams.map((exam) => (
+                  <Card key={exam.id} style={{ borderLeftWidth: 4, borderLeftColor: theme.colors.secondary, gap: 2 }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.textPrimary, flex: 1 }}>
+                        {exam.name}
+                      </Text>
+                      {exam.conferred != null && (
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            color: exam.conferred ? theme.colors.success : theme.colors.warning,
+                          }}
+                        >
+                          {exam.conferred ? "Conferido" : "Aguardando conferência"}
+                        </Text>
+                      )}
+                    </View>
+                    {exam.requestedAt && (
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                        Solicitado em {new Date(exam.requestedAt).toLocaleDateString("pt-BR")}
+                      </Text>
+                    )}
+                    {exam.performedAt && (
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                        Realizado em {new Date(exam.performedAt).toLocaleDateString("pt-BR")}
+                      </Text>
+                    )}
+                    {exam.resultAt && (
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                        Resultado em {new Date(exam.resultAt).toLocaleDateString("pt-BR")}
+                      </Text>
+                    )}
+                    {exam.result && (
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: theme.colors.textPrimary,
+                          backgroundColor: theme.colors.background,
+                          borderRadius: 10,
+                          padding: 8,
+                          marginTop: 2,
+                        }}
+                      >
+                        {exam.result}
+                      </Text>
+                    )}
+                    {exam.observation && (
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{exam.observation}</Text>
+                    )}
                   </Card>
                 ))}
               </View>
@@ -253,6 +330,15 @@ export function DocumentsScreen() {
                   {item.professionalName && (
                     <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: 1 }}>
                       {item.professionalName}
+                    </Text>
+                  )}
+                  {item.type === "exam" && (
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 11, marginTop: 1 }}>
+                      {item.content?.resultProfessionalName
+                        ? `Avaliação: ${item.content.resultProfessionalName} · ${
+                            item.content.resultAt ? new Date(item.content.resultAt).toLocaleDateString("pt-BR") : ""
+                          }`
+                        : "Aguardando avaliação"}
                     </Text>
                   )}
                 </View>
