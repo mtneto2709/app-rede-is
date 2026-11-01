@@ -28,7 +28,8 @@
   },
   "mobile": {
     "iosBundleId": "br.com.redeis.demo",
-    "androidPackage": "br.com.redeis.demo"
+    "androidPackage": "br.com.redeis.demo",
+    "easProjectId": "a42edcdd-344e-44ea-bc70-0d309e261d84"
   },
   "web": {
     "domains": ["demo.redeis.app", "localhost"]
