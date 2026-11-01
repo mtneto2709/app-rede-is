@@ -11,7 +11,18 @@ export function buildDocumentText(doc: Document): string {
   }
   if (doc.content?.cid10) lines.push(`CID10: ${doc.content.cid10}`);
   if (doc.content?.daysOff != null) lines.push(`Dias de afastamento: ${doc.content.daysOff}`);
-  if (doc.content?.text) lines.push("", doc.content.text);
+  if (doc.content?.medications && doc.content.medications.length > 0) {
+    lines.push("");
+    for (const med of doc.content.medications) {
+      lines.push(med.name);
+      for (const extra of [med.dose, med.quantity, med.duration, med.interrupted, med.reason]) {
+        if (extra) lines.push(extra);
+      }
+      lines.push("");
+    }
+  } else if (doc.content?.text) {
+    lines.push("", doc.content.text);
+  }
   return lines.join("\n");
 }
 

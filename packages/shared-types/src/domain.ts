@@ -157,6 +157,23 @@ export type VaccinationCardResponse = z.infer<typeof VaccinationCardResponse>;
  * equivalente com o que tiver disponível; campos ausentes simplesmente não
  * aparecem na tela.
  */
+/** Um medicamento prescrito numa receita — cada um vira um card próprio na tela, em vez de texto corrido. */
+export const PrescriptionMedicationItem = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** Dose/frequência já formatada pra exibir (ex. "1 comprimido — uma vez ao dia"), ou null se a base não tiver essa informação estruturada nem posologia em texto livre. */
+  dose: z.string().nullable(),
+  /** Já formatado como "Quantidade: N". */
+  quantity: z.string().nullable(),
+  /** Uso contínuo, período de tratamento ou duração em dias — já formatado, uma linha só. */
+  duration: z.string().nullable(),
+  /** Já formatado ("Interrompido em dd/mm/aaaa: motivo") — null quando não foi interrompido. */
+  interrupted: z.string().nullable(),
+  /** Motivo da prescrição (CID-10 ou CIAP), já formatado como "Motivo: ...". */
+  reason: z.string().nullable(),
+});
+export type PrescriptionMedicationItem = z.infer<typeof PrescriptionMedicationItem>;
+
 export const DocumentContent = z.object({
   healthUnitName: z.string().nullable(),
   professionalName: z.string().nullable(),
@@ -164,8 +181,10 @@ export const DocumentContent = z.object({
   cid10: z.string().nullable(),
   /** Dias de afastamento (atestado) — null quando não se aplica ao tipo de documento. */
   daysOff: z.number().nullable(),
-  /** Texto livre / itens do documento (lista de medicamentos da receita, motivo do encaminhamento etc). */
+  /** Texto livre do documento (motivo do encaminhamento, corpo do atestado etc) — já sem tags HTML, convertido pra texto plano. Null para receita, que usa `medications` em vez disso. */
   text: z.string().nullable(),
+  /** Populado só pra `type: "prescription"` — um item por medicamento. Null/vazio pros demais tipos de documento. */
+  medications: z.array(PrescriptionMedicationItem).nullable(),
 });
 export type DocumentContent = z.infer<typeof DocumentContent>;
 

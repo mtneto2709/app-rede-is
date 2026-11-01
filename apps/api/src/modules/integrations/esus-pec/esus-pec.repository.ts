@@ -9,6 +9,7 @@ import type {
   HealthCondition,
   HealthUnit,
   Patient,
+  PrescriptionMedicationItem,
   VitalMeasurements,
 } from "@rede-is/shared-types";
 import { ENV } from "../../../common/env/env.module";
@@ -21,6 +22,7 @@ import {
 } from "../../../common/utils/attendance-classification";
 import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
 import { classifyDiagnosedCondition } from "../../../common/utils/diagnosed-condition-classification";
+import { htmlToText } from "../../../common/utils/html-to-text";
 import type {
   HealthSummaryResult,
   IdentityCandidate,
@@ -370,7 +372,11 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
             professionalRole: row.no_cbo,
             cid10: row.no_cid10,
             daysOff: row.nu_dias,
-            text: row.ds_atestado,
+            // ds_atestado vem com HTML cru (editor rich-text do sistema
+            // original) — convertido pra texto plano, senão as tags
+            // apareciam literalmente na tela.
+            text: htmlToText(row.ds_atestado),
+            medications: null,
           },
           sourceSystem: "esus-pec" as const,
         }));
@@ -390,10 +396,10 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * ainda não eram usados (dose/frequência, quantidade, duração/uso
    * contínuo, interrupção, motivo via CID-10 ou CIAP — mutuamente
    * exclusivos pela própria constraint `ck_receitamedicamento_cid_ciap`)
-   * pra montar um texto mais completo por medicamento, não só nome +
-   * posologia. Segue agrupada por atendimento — um "documento" por
-   * atendimento que gerou pelo menos uma prescrição, com um bloco de
-   * texto por medicamento.
+   * pra montar `content.medications` — um item estruturado por
+   * medicamento (card próprio na tela, não texto corrido). Segue
+   * agrupada por atendimento — um "documento" por atendimento que gerou
+   * pelo menos uma prescrição.
    *
    * `tb_ciap` já usa o join correto (`co_seq_ciap`, não `co_ciap`, que é
    * o código — mesmo bug encontrado e corrigido antes em
@@ -408,6 +414,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   private async findPrescriptionDocuments(patientId: string): Promise<Document[]> {
     try {
       const rows = await this.pool.query<{
+        co_seq_receita_medicamento: string;
         co_seq_atend_prof: string;
         dt_inicio: string;
         no_medicamento: string | null;
@@ -431,7 +438,8 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         no_cbo: string | null;
         no_unidade_saude: string | null;
       }>(
-        `SELECT ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio, med.no_medicamento,
+        `SELECT r.co_seq_receita_medicamento::text AS co_seq_receita_medicamento,
+                ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio, med.no_medicamento,
                 r.no_posologia, r.qt_receitada, r.st_uso_continuo, r.dt_inicio_tratamento, r.dt_fim_tratamento,
                 r.qt_duracao_tratamento, r.ds_dose, r.ds_frequencia_dose, r.st_interrompido,
                 r.ds_observacao_interrupcao, r.dt_interrupcao, r.qt_dose_manha, r.qt_dose_tarde, r.qt_dose_noite,
@@ -470,7 +478,9 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
             professionalRole: first.no_cbo,
             cid10: null,
             daysOff: null,
-            text: items.map((item) => this.formatPrescriptionItem(item)).join("\n\n"),
+            // Receita usa `medications` (um card por medicamento), não texto corrido.
+            text: null,
+            medications: items.map((item) => this.buildPrescriptionMedicationItem(item)),
           },
           sourceSystem: "esus-pec" as const,
         };
@@ -482,8 +492,9 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     }
   }
 
-  /** Monta o bloco de texto de um medicamento prescrito pros detalhes nativos confirmados em tb_receita_medicamento. */
-  private formatPrescriptionItem(row: {
+  /** Monta um item estruturado de medicamento prescrito a partir dos detalhes nativos confirmados em tb_receita_medicamento. */
+  private buildPrescriptionMedicationItem(row: {
+    co_seq_receita_medicamento: string;
     no_medicamento: string | null;
     no_posologia: string | null;
     qt_receitada: number | null;
@@ -501,9 +512,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     qt_dose_noite: string | null;
     no_cid10: string | null;
     ds_ciap: string | null;
-  }): string {
-    const lines = [row.no_medicamento ?? "Medicamento não identificado"];
-
+  }): PrescriptionMedicationItem {
     const periods = [
       row.qt_dose_manha ? `manhã: ${row.qt_dose_manha}` : null,
       row.qt_dose_tarde ? `tarde: ${row.qt_dose_tarde}` : null,
@@ -516,28 +525,36 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         : periods.length > 0
           ? periods.join(", ")
           : row.no_posologia;
-    if (dose) lines.push(dose);
 
-    if (row.qt_receitada != null) lines.push(`Quantidade: ${row.qt_receitada}`);
-
+    let duration: string | null = null;
     if (row.st_uso_continuo === 1) {
-      lines.push("Uso contínuo");
+      duration = "Uso contínuo";
     } else if (row.dt_inicio_tratamento && row.dt_fim_tratamento) {
-      lines.push(`Tratamento: ${this.formatBrDate(row.dt_inicio_tratamento)} a ${this.formatBrDate(row.dt_fim_tratamento)}`);
+      duration = `Tratamento: ${this.formatBrDate(row.dt_inicio_tratamento)} a ${this.formatBrDate(row.dt_fim_tratamento)}`;
     } else if (row.qt_duracao_tratamento) {
-      lines.push(`Duração: ${row.qt_duracao_tratamento} dia(s)`);
+      duration = `Duração: ${row.qt_duracao_tratamento} dia(s)`;
     }
 
+    let interrupted: string | null = null;
     if (row.st_interrompido === 1) {
       const when = row.dt_interrupcao ? ` em ${this.formatBrDate(row.dt_interrupcao)}` : "";
-      const why = row.ds_observacao_interrupcao ? `: ${row.ds_observacao_interrupcao}` : "";
-      lines.push(`Interrompido${when}${why}`);
+      // ds_observacao_interrupcao é texto livre digitado pelo profissional
+      // — mesma cautela de ds_atestado, pode vir com HTML.
+      const why = htmlToText(row.ds_observacao_interrupcao);
+      interrupted = `Interrompido${when}${why ? `: ${why}` : ""}`;
     }
 
     const reason = row.no_cid10 ?? row.ds_ciap;
-    if (reason) lines.push(`Motivo: ${reason}`);
 
-    return lines.join("\n");
+    return {
+      id: `prescription-item:${row.co_seq_receita_medicamento}`,
+      name: row.no_medicamento ?? "Medicamento não identificado",
+      dose: dose ?? null,
+      quantity: row.qt_receitada != null ? `Quantidade: ${row.qt_receitada}` : null,
+      duration,
+      interrupted,
+      reason: reason ? `Motivo: ${reason}` : null,
+    };
   }
 
   private async findReferralDocuments(patientId: string): Promise<Document[]> {
@@ -576,6 +593,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
           cid10: row.no_cid10,
           daysOff: null,
           text: row.ds_especialidade,
+          medications: null,
         },
         sourceSystem: "esus-pec" as const,
       }));

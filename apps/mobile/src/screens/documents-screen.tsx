@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Modal, Pressable, Share, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Share, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Document } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
 import { withAlpha } from "@/theme/tone";
-import { ScreenList, Card } from "@/components/screen-list";
+import { ScreenHeader } from "@/components/screen-header";
+import { Card } from "@/components/screen-list";
 
 const TYPE_LABEL: Record<Document["type"], string> = {
   prescription: "Receita",
@@ -23,6 +24,8 @@ const TYPE_ICON: Record<Document["type"], keyof typeof Ionicons.glyphMap> = {
   report: "clipboard-outline",
 };
 
+const ALL_TYPES = Object.keys(TYPE_LABEL) as Document["type"][];
+
 /** Espelha `apps/web/src/lib/document-text.ts` — e-SUS não guarda arquivo pronto, então montamos o texto a partir de `content`. */
 function buildDocumentText(doc: Document): string {
   const lines = [doc.title, ""];
@@ -33,7 +36,18 @@ function buildDocumentText(doc: Document): string {
   }
   if (doc.content?.cid10) lines.push(`CID10: ${doc.content.cid10}`);
   if (doc.content?.daysOff != null) lines.push(`Dias de afastamento: ${doc.content.daysOff}`);
-  if (doc.content?.text) lines.push("", doc.content.text);
+  if (doc.content?.medications && doc.content.medications.length > 0) {
+    lines.push("");
+    for (const med of doc.content.medications) {
+      lines.push(med.name);
+      for (const extra of [med.dose, med.quantity, med.duration, med.interrupted, med.reason]) {
+        if (extra) lines.push(extra);
+      }
+      lines.push("");
+    }
+  } else if (doc.content?.text) {
+    lines.push("", doc.content.text);
+  }
   return lines.join("\n");
 }
 
@@ -61,42 +75,59 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
             </Pressable>
           </View>
 
-          <View style={{ gap: 2 }}>
-            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-              Data: {new Date(doc.issuedAt).toLocaleDateString("pt-BR")}
-            </Text>
-            {doc.content?.healthUnitName && (
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Unidade: {doc.content.healthUnitName}</Text>
-            )}
-            {doc.professionalName && (
+          <ScrollView contentContainerStyle={{ gap: 12 }}>
+            <View style={{ gap: 2 }}>
               <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                Profissional: {doc.professionalName}
-                {doc.content?.professionalRole ? ` — ${doc.content.professionalRole}` : ""}
+                Data: {new Date(doc.issuedAt).toLocaleDateString("pt-BR")}
               </Text>
-            )}
-            {doc.content?.cid10 && (
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>CID10: {doc.content.cid10}</Text>
-            )}
-            {doc.content?.daysOff != null && (
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
-                Dias de afastamento: {doc.content.daysOff}
-              </Text>
-            )}
-          </View>
+              {doc.content?.healthUnitName && (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Unidade: {doc.content.healthUnitName}</Text>
+              )}
+              {doc.professionalName && (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                  Profissional: {doc.professionalName}
+                  {doc.content?.professionalRole ? ` — ${doc.content.professionalRole}` : ""}
+                </Text>
+              )}
+              {doc.content?.cid10 && (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>CID10: {doc.content.cid10}</Text>
+              )}
+              {doc.content?.daysOff != null && (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                  Dias de afastamento: {doc.content.daysOff}
+                </Text>
+              )}
+            </View>
 
-          {doc.content?.text && (
-            <Text
-              style={{
-                fontSize: 13,
-                color: theme.colors.textPrimary,
-                backgroundColor: theme.colors.background,
-                borderRadius: 12,
-                padding: 12,
-              }}
-            >
-              {doc.content.text}
-            </Text>
-          )}
+            {doc.content?.medications && doc.content.medications.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                {doc.content.medications.map((med) => (
+                  <Card key={med.id} style={{ borderLeftWidth: 4, borderLeftColor: theme.colors.success, gap: 2 }}>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.textPrimary }}>{med.name}</Text>
+                    {med.dose && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.dose}</Text>}
+                    {med.quantity && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.quantity}</Text>}
+                    {med.duration && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.duration}</Text>}
+                    {med.interrupted && <Text style={{ fontSize: 12, color: theme.colors.danger }}>{med.interrupted}</Text>}
+                    {med.reason && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.reason}</Text>}
+                  </Card>
+                ))}
+              </View>
+            ) : (
+              doc.content?.text && (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: theme.colors.textPrimary,
+                    backgroundColor: theme.colors.background,
+                    borderRadius: 12,
+                    padding: 12,
+                  }}
+                >
+                  {doc.content.text}
+                </Text>
+              )
+            )}
+          </ScrollView>
 
           <Pressable
             onPress={() => Share.share({ message: buildDocumentText(doc), title: doc.title }).catch(() => {})}
@@ -124,6 +155,7 @@ export function DocumentsScreen() {
   const { data, isLoading, error } = useMeQuery<Document[]>("documents");
   const theme = useTheme();
   const [selected, setSelected] = useState<Document | null>(null);
+  const [activeTypes, setActiveTypes] = useState<Set<Document["type"]>>(new Set(ALL_TYPES));
 
   const typeColor: Record<Document["type"], string> = {
     prescription: theme.colors.success,
@@ -133,19 +165,73 @@ export function DocumentsScreen() {
     report: theme.colors.primary,
   };
 
+  function toggleType(type: Document["type"]) {
+    setActiveTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }
+
+  const visibleDocs = data?.filter((doc) => activeTypes.has(doc.type)) ?? [];
+
   return (
-    <>
-      <ScreenList
-        title="Documentos"
-        data={data}
-        isLoading={isLoading}
-        error={error}
-        emptyLabel="Nenhum documento encontrado."
-        keyExtractor={(item) => item.id}
-        renderItem={(item) => {
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <ScreenHeader title="Documentos" />
+      {isLoading && <ActivityIndicator style={{ marginTop: 24 }} color={theme.colors.primary} />}
+      {error && <Text style={{ color: theme.colors.danger, paddingHorizontal: 20 }}>{error}</Text>}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24, gap: 12 }}>
+        <Card style={{ borderLeftWidth: 4, borderLeftColor: theme.colors.warning, flexDirection: "row", gap: 10 }}>
+          <Ionicons name="alert-circle-outline" size={20} color={theme.colors.warning} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.textPrimary }}>Atenção</Text>
+            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+              As informações abaixo trazem os registros de documentos emitidos pelo sistema, com todas as
+              informações registradas. Estes não substituem os documentos originais que foram entregues assinados
+              pelo profissional que emitiu.
+            </Text>
+          </View>
+        </Card>
+
+        {data && data.length > 0 && (
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {ALL_TYPES.map((type) => {
+              const active = activeTypes.has(type);
+              const color = typeColor[type];
+              return (
+                <Pressable
+                  key={type}
+                  onPress={() => toggleType(type)}
+                  style={{
+                    borderWidth: 1.5,
+                    borderColor: color,
+                    backgroundColor: active ? color : theme.colors.background,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#FFFFFF" : color }}>
+                    {TYPE_LABEL[type]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        {!isLoading && data?.length === 0 && (
+          <Text style={{ color: theme.colors.textSecondary }}>Nenhum documento encontrado.</Text>
+        )}
+        {!isLoading && data && data.length > 0 && visibleDocs.length === 0 && (
+          <Text style={{ color: theme.colors.textSecondary }}>Nenhum documento para os filtros selecionados.</Text>
+        )}
+
+        {visibleDocs.map((item) => {
           const color = typeColor[item.type];
           return (
-            <Card style={{ gap: 10 }}>
+            <Card key={item.id} style={{ gap: 10 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
                 <View
                   style={{
@@ -209,9 +295,9 @@ export function DocumentsScreen() {
               </View>
             </Card>
           );
-        }}
-      />
+        })}
+      </ScrollView>
       {selected && <DocumentViewer doc={selected} onClose={() => setSelected(null)} />}
-    </>
+    </View>
   );
 }
