@@ -1,15 +1,138 @@
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import type { HealthSummary } from "@rede-is/shared-types";
+import {
+  classifyConditionCategory,
+  CONDITION_EDUCATION,
+  type ConditionCategory,
+  type HealthCondition,
+  type HealthSummary,
+} from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
 import { withAlpha } from "@/theme/tone";
 import { ScreenHeader } from "@/components/screen-header";
 import { Card } from "@/components/screen-list";
 
+const CONDITION_ICON: Record<ConditionCategory, keyof typeof Ionicons.glyphMap> = {
+  hipertensao: "pulse-outline",
+  diabetes: "water-outline",
+  cancer: "ribbon-outline",
+  derrame: "flash-outline",
+  infarto: "heart-dislike-outline",
+  doenca_cardiaca: "heart-outline",
+  problema_rins: "filter-outline",
+  doenca_respiratoria: "medical-outline",
+  tuberculose: "thermometer-outline",
+  hanseniase: "hand-left-outline",
+  saude_mental: "body-outline",
+  fumante: "flame-outline",
+  uso_alcool: "wine-outline",
+  outro: "medical-outline",
+};
+
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+function ConditionDetailModal({
+  condition,
+  onClose,
+  theme,
+}: {
+  condition: HealthCondition;
+  onClose: () => void;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const category = classifyConditionCategory(condition.label);
+  const icon = CONDITION_ICON[category];
+  const content = CONDITION_EDUCATION[category];
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+        <View
+          style={{
+            backgroundColor: theme.colors.surface,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 20,
+            maxHeight: "85%",
+            gap: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1, paddingRight: 12 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: withAlpha(theme.colors.primary, "1A"),
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name={icon} size={18} color={theme.colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.colors.textPrimary }}>
+                  {condition.label}
+                </Text>
+                {condition.startedAt && (
+                  <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>
+                    Início: {formatDate(condition.startedAt)}
+                  </Text>
+                )}
+              </View>
+            </View>
+            <Pressable onPress={onClose}>
+              <Ionicons name="close" size={22} color={theme.colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          <ScrollView style={{ gap: 12 }} contentContainerStyle={{ gap: 12 }}>
+            <View>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>
+                O que é
+              </Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 19 }}>{content.whatIsIt}</Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>
+                Riscos
+              </Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 19 }}>{content.risks}</Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>
+                Cuidados
+              </Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 19 }}>{content.care}</Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.colors.textSecondary, textTransform: "uppercase", marginBottom: 4 }}>
+                O que evitar
+              </Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 19 }}>{content.avoid}</Text>
+            </View>
+            <Text
+              style={{
+                fontSize: 10,
+                color: theme.colors.textSecondary,
+                borderTopWidth: 1,
+                borderTopColor: "rgba(0,0,0,0.06)",
+                paddingTop: 10,
+              }}
+            >
+              Informação geral, não substitui orientação de um profissional de saúde sobre o seu caso.
+            </Text>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 function MeasurementStat({
@@ -47,6 +170,7 @@ function MeasurementStat({
 export function HealthSummaryScreen() {
   const { data, isLoading, error } = useMeQuery<HealthSummary>("health-summary");
   const theme = useTheme();
+  const [selectedCondition, setSelectedCondition] = useState<HealthCondition | null>(null);
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -124,14 +248,19 @@ export function HealthSummaryScreen() {
                 <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Nenhuma condição registrada.</Text>
               ) : (
                 data.conditions.map((c) => (
-                  <Card key={c.id}>
-                    <Text style={{ fontSize: 13, color: theme.colors.textPrimary }}>{c.label}</Text>
-                    {c.startedAt && (
-                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 }}>
-                        Início: {formatDate(c.startedAt)}
-                      </Text>
-                    )}
-                  </Card>
+                  <Pressable key={c.id} onPress={() => setSelectedCondition(c)}>
+                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Ionicons name={CONDITION_ICON[classifyConditionCategory(c.label)]} size={16} color={theme.colors.danger} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, color: theme.colors.textPrimary }}>{c.label}</Text>
+                        {c.startedAt && (
+                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 }}>
+                            Início: {formatDate(c.startedAt)}
+                          </Text>
+                        )}
+                      </View>
+                    </Card>
+                  </Pressable>
                 ))
               )}
             </View>
@@ -149,19 +278,12 @@ export function HealthSummaryScreen() {
                 </Text>
               ) : (
                 data.selfReportedConditions.map((c) => (
-                  <Card key={c.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                    <Text style={{ fontSize: 13, color: theme.colors.textPrimary, flex: 1 }}>{c.label}</Text>
-                    <View
-                      style={{
-                        backgroundColor: withAlpha(theme.colors.textSecondary, "1A"),
-                        borderRadius: 999,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                      }}
-                    >
-                      <Text style={{ color: theme.colors.textSecondary, fontSize: 10, fontWeight: "700" }}>Auto referido</Text>
-                    </View>
-                  </Card>
+                  <Pressable key={c.id} onPress={() => setSelectedCondition(c)}>
+                    <Card style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Ionicons name={CONDITION_ICON[classifyConditionCategory(c.label)]} size={16} color={theme.colors.secondary} />
+                      <Text style={{ fontSize: 13, color: theme.colors.textPrimary, flex: 1 }}>{c.label}</Text>
+                    </Card>
+                  </Pressable>
                 ))
               )}
             </View>
@@ -213,6 +335,9 @@ export function HealthSummaryScreen() {
           </>
         )}
       </ScrollView>
+      {selectedCondition && (
+        <ConditionDetailModal condition={selectedCondition} onClose={() => setSelectedCondition(null)} theme={theme} />
+      )}
     </View>
   );
 }

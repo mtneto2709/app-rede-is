@@ -1,16 +1,118 @@
 "use client";
 
-import { HeartPulse, ClipboardList, Pill, FlaskConical, AlertTriangle, Activity, Weight, Ruler, Thermometer, Droplet } from "lucide-react";
-import type { HealthSummary } from "@rede-is/shared-types";
+import { useState } from "react";
+import {
+  HeartPulse,
+  ClipboardList,
+  Pill,
+  FlaskConical,
+  AlertTriangle,
+  Activity,
+  Weight,
+  Ruler,
+  Thermometer,
+  Droplet,
+  Ribbon,
+  Zap,
+  HeartCrack,
+  Heart,
+  Filter,
+  Wind,
+  Hand,
+  Brain,
+  Cigarette,
+  Wine,
+  Stethoscope,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  classifyConditionCategory,
+  CONDITION_EDUCATION,
+  type ConditionCategory,
+  type HealthCondition,
+  type HealthSummary,
+} from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const CONDITION_ICON: Record<ConditionCategory, LucideIcon> = {
+  hipertensao: HeartPulse,
+  diabetes: Droplet,
+  cancer: Ribbon,
+  derrame: Zap,
+  infarto: HeartCrack,
+  doenca_cardiaca: Heart,
+  problema_rins: Filter,
+  doenca_respiratoria: Wind,
+  tuberculose: Thermometer,
+  hanseniase: Hand,
+  saude_mental: Brain,
+  fumante: Cigarette,
+  uso_alcool: Wine,
+  outro: Stethoscope,
+};
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("pt-BR");
+}
+
+function ConditionDetailModal({ condition, onClose }: { condition: HealthCondition; onClose: () => void }) {
+  const category = classifyConditionCategory(condition.label);
+  const Icon = CONDITION_ICON[category];
+  const content = CONDITION_EDUCATION[category];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div
+        className="bg-surface rounded-t-3xl sm:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold">{condition.label}</h2>
+              {condition.startedAt && (
+                <p className="text-xs text-text-secondary">Início: {formatDate(condition.startedAt)}</p>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="text-text-secondary shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-3 text-sm">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-text-secondary mb-1">O que é</p>
+            <p>{content.whatIsIt}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-text-secondary mb-1">Riscos</p>
+            <p>{content.risks}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-text-secondary mb-1">Cuidados</p>
+            <p>{content.care}</p>
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-text-secondary mb-1">O que evitar</p>
+            <p>{content.avoid}</p>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-text-secondary border-t border-black/5 pt-3">
+          Informação geral, não substitui orientação de um profissional de saúde sobre o seu caso.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function MeasurementStat({ icon: Icon, label, value }: { icon: typeof Weight; label: string; value: string | null }) {
@@ -28,6 +130,7 @@ function MeasurementStat({ icon: Icon, label, value }: { icon: typeof Weight; la
 
 export function HealthSummaryPageClient() {
   const { data, isLoading, error } = useMeQuery<HealthSummary>("health-summary");
+  const [selectedCondition, setSelectedCondition] = useState<HealthCondition | null>(null);
 
   return (
     <div>
@@ -99,14 +202,24 @@ export function HealthSummaryPageClient() {
                 <p className="text-xs text-text-secondary">Nenhuma condição registrada.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.conditions.map((c) => (
-                    <Card key={c.id} className="p-3">
-                      <p className="text-sm">{c.label}</p>
-                      {c.startedAt && (
-                        <p className="text-xs text-text-secondary mt-0.5">Início: {formatDate(c.startedAt)}</p>
-                      )}
-                    </Card>
-                  ))}
+                  {data.conditions.map((c) => {
+                    const Icon = CONDITION_ICON[classifyConditionCategory(c.label)];
+                    return (
+                      <Card
+                        key={c.id}
+                        onClick={() => setSelectedCondition(c)}
+                        className="p-3 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                      >
+                        <Icon className="h-4 w-4 text-danger shrink-0" />
+                        <div>
+                          <p className="text-sm">{c.label}</p>
+                          {c.startedAt && (
+                            <p className="text-xs text-text-secondary mt-0.5">Início: {formatDate(c.startedAt)}</p>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -120,12 +233,19 @@ export function HealthSummaryPageClient() {
                 <p className="text-xs text-text-secondary">Nenhuma condição autorreferida registrada.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.selfReportedConditions.map((c) => (
-                    <Card key={c.id} className="p-3 flex items-center justify-between gap-2">
-                      <p className="text-sm">{c.label}</p>
-                      <Badge tone="neutral" className="shrink-0">Auto referido</Badge>
-                    </Card>
-                  ))}
+                  {data.selfReportedConditions.map((c) => {
+                    const Icon = CONDITION_ICON[classifyConditionCategory(c.label)];
+                    return (
+                      <Card
+                        key={c.id}
+                        onClick={() => setSelectedCondition(c)}
+                        className="p-3 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                      >
+                        <Icon className="h-4 w-4 text-secondary shrink-0" />
+                        <p className="text-sm">{c.label}</p>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -173,6 +293,9 @@ export function HealthSummaryPageClient() {
           </>
         )}
       </div>
+      {selectedCondition && (
+        <ConditionDetailModal condition={selectedCondition} onClose={() => setSelectedCondition(null)} />
+      )}
     </div>
   );
 }
