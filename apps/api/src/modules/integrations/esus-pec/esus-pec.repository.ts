@@ -727,6 +727,34 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
+   * Mesmo propósito de `findCitizenIdByCpf` (cruzar o cidadão de um vínculo
+   * Sistema IS com o cadastro equivalente no e-SUS), usado quando o
+   * paciente não tem CPF cadastrado — só CNS (ver `nu_cns`, coluna não
+   * confirmada, mesma ressalva de `getPatientCns`; por isso o try/catch
+   * aqui também, diferente de `findCitizenIdByCpf` que usa coluna
+   * confirmada). Compara só dígitos dos dois lados.
+   */
+  async findCitizenIdByCns(cns: string): Promise<string | null> {
+    const digits = cns.replace(/\D/g, "");
+    if (!digits) return null;
+
+    try {
+      const rows = await this.pool.query<{ co_seq_cidadao: string }>(
+        `SELECT co_seq_cidadao::text AS co_seq_cidadao
+         FROM public.tb_cidadao
+         WHERE st_ativo = 1 AND regexp_replace(coalesce(nu_cns, ''), '\\D', '', 'g') = $1
+         LIMIT 1`,
+        [digits],
+      );
+      return rows[0]?.co_seq_cidadao ?? null;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao cruzar CNS (coluna não confirmada) com o e-SUS PEC: ${message}`);
+      return null;
+    }
+  }
+
+  /**
    * Confiança por fonte, depois do DDL real que o cliente passou pras
    * tabelas de medição/alergia/atestado/uso contínuo/problema:
    *  - conditions (auto-relatadas): ainda `tb_cds_cad_individual`, schema

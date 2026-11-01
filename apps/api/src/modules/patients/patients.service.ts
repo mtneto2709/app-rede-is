@@ -155,21 +155,35 @@ export class PatientsService {
    * tela inteira.
    */
   /**
-   * Vacinação vive só no e-SUS PEC, mesmo quando o vínculo da conta é com o
-   * Sistema IS — é o mesmo cidadão nas duas bases, só que o primeiro acesso
-   * pode ter resolvido pro Sistema IS (ex.: contato não encontrado no
-   * e-SUS naquela busca). Por isso, quando o vínculo não é direto com o
-   * e-SUS, busca o cadastro de lá por CPF antes de desistir.
+   * Vacinação e Minha Saúde vivem só no e-SUS PEC, mesmo quando o vínculo
+   * da conta é com o Sistema IS — é o mesmo cidadão nas duas bases, só que
+   * o primeiro acesso pode ter resolvido pro Sistema IS (ex.: contato não
+   * encontrado no e-SUS naquela busca). Por isso, quando o vínculo não é
+   * direto com o e-SUS, busca o cadastro de lá por CPF; se o paciente não
+   * tiver CPF cadastrado na base de origem, cai pro CNS antes de desistir
+   * (mesma ordem de prioridade usada em TablesRepository.findAlertsByPatient).
    */
   private async resolveEsusCitizenId(link: { sourceSystem: string; sourcePatientId: string }): Promise<string | null> {
     if (link.sourceSystem === "esus-pec") return link.sourcePatientId;
 
-    const profile = await this.repositoryFor(link.sourceSystem).getIdentityProfile(link.sourcePatientId);
-    if (!profile?.cpf) return null;
+    const repo = this.repositoryFor(link.sourceSystem);
+    const profile = await repo.getIdentityProfile(link.sourcePatientId);
 
-    return this.esusPec.findCitizenIdByCpf(profile.cpf).catch((err) => {
+    if (profile?.cpf) {
+      const byCpf = await this.esusPec.findCitizenIdByCpf(profile.cpf).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Falha ao cruzar CPF com o e-SUS PEC: ${message}`);
+        return null;
+      });
+      if (byCpf) return byCpf;
+    }
+
+    const cns = await repo.getPatientCns(link.sourcePatientId);
+    if (!cns) return null;
+
+    return this.esusPec.findCitizenIdByCns(cns).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Falha ao cruzar CPF com o e-SUS PEC (vacinação): ${message}`);
+      this.logger.error(`Falha ao cruzar CNS com o e-SUS PEC: ${message}`);
       return null;
     });
   }
@@ -221,7 +235,18 @@ export class PatientsService {
 
   async getHealthSummary(tenantId: string, userId: string, ip?: string): Promise<HealthSummary> {
     const link = await this.requireLink(userId);
-    const result = await this.repositoryFor(link.sourceSystem).getHealthSummary(link.sourcePatientId);
+    const esusCitizenId = await this.resolveEsusCitizenId(link);
+    const result = esusCitizenId
+      ? await this.esusPec.getHealthSummary(esusCitizenId)
+      : {
+          available: false as const,
+          conditions: [],
+          selfReportedConditions: [],
+          medications: [],
+          exams: [],
+          allergies: [],
+          measurements: null,
+        };
     await this.logRead(tenantId, userId, "patients.health_summary.read", ip);
     return result;
   }
