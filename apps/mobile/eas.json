@@ -22,6 +22,14 @@
         "EXPO_PUBLIC_TENANT_SLUG": "demo",
         "EXPO_PUBLIC_API_BASE_URL": "https://api.demo.redeis.app"
       }
+    },
+    "demo-preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_TENANT_SLUG": "demo",
+        "EXPO_PUBLIC_API_BASE_URL": "SUBSTITUA_PELA_URL_PUBLICA_DA_API"
+      }
     }
   },
   "submit": {
