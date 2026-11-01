@@ -409,12 +409,19 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * `tb_ciap` já usa o join correto (`co_seq_ciap`, não `co_ciap`, que é
    * o código — mesmo bug encontrado e corrigido antes em
    * `getDiagnosedConditions`). Nome do medicamento via catálogo
-   * `tb_medicamento` (tabela/relacionamento `co_medicamento` reais; nome
-   * da coluna de rótulo, `no_medicamento`, continua chute por convenção).
+   * `tb_medicamento` — CONFIRMADO via DDL real: BUG REAL já visto em
+   * produção, os dois nomes chutados antes (`co_medicamento` como PK,
+   * `no_medicamento` como rótulo) estavam errados e quebravam a query
+   * inteira ("column med.co_medicamento does not exist"), derrubando a
+   * busca de receitas inteira silenciosamente. O PK real é
+   * `co_seq_medicamento`; não existe coluna de nome única — o rótulo é
+   * composto de `no_principio_ativo` (obrigatória) + `ds_concentracao` +
+   * `ds_unidade_fornecimento` (ver `buildPrescriptionMedicationItem`).
    * Fora de escopo por ora (exigiriam adivinhar nome de coluna em
    * catálogos sem DDL confirmado): `tp_receita`, `co_aplicacao_medicamento`,
-   * `qt_dose`/`co_unidade_medida_dose`, e agrupamento por
-   * `co_receita_uso_continuo_grupo` (ciclos de uso contínuo).
+   * `qt_dose`/`co_unidade_medida_dose`, `co_forma_farmaceutica`, e
+   * agrupamento por `co_receita_uso_continuo_grupo` (ciclos de uso
+   * contínuo).
    */
   private async findPrescriptionDocuments(patientId: string): Promise<Document[]> {
     try {
@@ -422,7 +429,9 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         co_seq_receita_medicamento: string;
         co_seq_atend_prof: string;
         dt_inicio: string;
-        no_medicamento: string | null;
+        no_principio_ativo: string | null;
+        ds_concentracao: string | null;
+        ds_unidade_fornecimento: string | null;
         no_posologia: string | null;
         qt_receitada: number | null;
         st_uso_continuo: number;
@@ -444,14 +453,15 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         no_unidade_saude: string | null;
       }>(
         `SELECT r.co_seq_receita_medicamento::text AS co_seq_receita_medicamento,
-                ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio, med.no_medicamento,
+                ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio,
+                med.no_principio_ativo, med.ds_concentracao, med.ds_unidade_fornecimento,
                 r.no_posologia, r.qt_receitada, r.st_uso_continuo, r.dt_inicio_tratamento, r.dt_fim_tratamento,
                 r.qt_duracao_tratamento, r.ds_dose, r.ds_frequencia_dose, r.st_interrompido,
                 r.ds_observacao_interrupcao, r.dt_interrupcao, r.qt_dose_manha, r.qt_dose_tarde, r.qt_dose_noite,
                 cid.no_cid10, ciap.ds_ciap, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude
          FROM public.tb_receita_medicamento r
          ${this.atendProfContextJoin.replace("{{FK}}", "r.co_atend_prof")}
-         LEFT JOIN public.tb_medicamento med ON med.co_medicamento = r.co_medicamento
+         LEFT JOIN public.tb_medicamento med ON med.co_seq_medicamento = r.co_medicamento
          LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = r.co_cid10
          LEFT JOIN public.tb_ciap ciap ON ciap.co_seq_ciap = r.co_ciap
          WHERE p.co_cidadao = $1
@@ -500,10 +510,12 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     }
   }
 
-  /** Monta um item estruturado de medicamento prescrito a partir dos detalhes nativos confirmados em tb_receita_medicamento. */
+  /** Monta um item estruturado de medicamento prescrito a partir dos detalhes nativos confirmados em tb_receita_medicamento/tb_medicamento. */
   private buildPrescriptionMedicationItem(row: {
     co_seq_receita_medicamento: string;
-    no_medicamento: string | null;
+    no_principio_ativo: string | null;
+    ds_concentracao: string | null;
+    ds_unidade_fornecimento: string | null;
     no_posologia: string | null;
     qt_receitada: number | null;
     st_uso_continuo: number;
@@ -554,9 +566,16 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
 
     const reason = row.no_cid10 ?? row.ds_ciap;
 
+    // Sem coluna de nome única em tb_medicamento: princípio ativo
+    // (obrigatória) + concentração + unidade de fornecimento, ex.
+    // "Losartana Potássica 50mg (comprimido)".
+    let name = row.no_principio_ativo ?? "Medicamento não identificado";
+    if (row.ds_concentracao) name += ` ${row.ds_concentracao}`;
+    if (row.ds_unidade_fornecimento) name += ` (${row.ds_unidade_fornecimento})`;
+
     return {
       id: `prescription-item:${row.co_seq_receita_medicamento}`,
-      name: row.no_medicamento ?? "Medicamento não identificado",
+      name,
       dose: dose ?? null,
       quantity: row.qt_receitada != null ? `Quantidade: ${row.qt_receitada}` : null,
       duration,
@@ -1376,36 +1395,50 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * `co_prontuario` (não precisa passar por atendimento), com
    * `co_ultima_receita_medicamento` apontando pra prescrição mais recente
    * desse ciclo (de onde vem a posologia). O join em si (co_prontuario,
-   * co_medicamento, co_ultima_receita_medicamento) está 100% confirmado;
-   * só os nomes das colunas dentro dos catálogos (`tb_medicamento.no_medicamento`,
-   * `tb_receita_medicamento.no_posologia`/`ds_dose`/`co_seq_receita_medicamento`)
-   * continuam sendo convenção, não confirmados por DDL próprio dessas tabelas.
+   * co_medicamento, co_ultima_receita_medicamento) está 100% confirmado.
+   * `tb_medicamento` — CONFIRMADO via DDL real: BUG REAL já visto em
+   * produção (mesmo bug de `findPrescriptionDocuments`), os nomes
+   * chutados antes (`co_medicamento` como PK, `no_medicamento` como
+   * rótulo) estavam errados e quebravam a query inteira. PK real é
+   * `co_seq_medicamento`; sem coluna de nome única, o rótulo é composto
+   * de `no_principio_ativo` + `ds_concentracao` + `ds_unidade_fornecimento`
+   * (mesma lógica de `buildPrescriptionMedicationItem`).
+   * `tb_receita_medicamento.no_posologia`/`ds_dose`/`co_seq_receita_medicamento`
+   * continuam confirmados (mesmo DDL já usado em `findPrescriptionDocuments`).
    */
   private async getMedicationsInUse(sourcePatientId: string): Promise<ContinuousMedication[] | null> {
     try {
       const rows = await this.pool.query<{
         co_seq_medicament_uso_continuo: string;
-        no_medicamento: string | null;
+        no_principio_ativo: string | null;
+        ds_concentracao: string | null;
+        ds_unidade_fornecimento: string | null;
         no_posologia: string | null;
         ds_dose: string | null;
       }>(
         `SELECT tuc.co_seq_medicament_uso_continuo::text AS co_seq_medicament_uso_continuo,
-                med.no_medicamento, r.no_posologia, r.ds_dose
+                med.no_principio_ativo, med.ds_concentracao, med.ds_unidade_fornecimento,
+                r.no_posologia, r.ds_dose
          FROM public.tb_medicamento_uso_continuo tuc
          INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = tuc.co_prontuario
-         LEFT JOIN public.tb_medicamento med ON med.co_medicamento = tuc.co_medicamento
+         LEFT JOIN public.tb_medicamento med ON med.co_seq_medicamento = tuc.co_medicamento
          LEFT JOIN public.tb_receita_medicamento r ON r.co_seq_receita_medicamento = tuc.co_ultima_receita_medicamento
          WHERE p.co_cidadao = $1`,
         [sourcePatientId],
       );
 
       return rows
-        .filter((row) => row.no_medicamento)
-        .map((row) => ({
-          id: `medication:${row.co_seq_medicament_uso_continuo}`,
-          name: row.no_medicamento as string,
-          dosage: row.no_posologia ?? row.ds_dose,
-        }));
+        .filter((row) => row.no_principio_ativo)
+        .map((row) => {
+          let name = row.no_principio_ativo as string;
+          if (row.ds_concentracao) name += ` ${row.ds_concentracao}`;
+          if (row.ds_unidade_fornecimento) name += ` (${row.ds_unidade_fornecimento})`;
+          return {
+            id: `medication:${row.co_seq_medicament_uso_continuo}`,
+            name,
+            dosage: row.no_posologia ?? row.ds_dose,
+          };
+        });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Falha ao buscar medicamentos de uso contínuo (tb_medicamento_uso_continuo) de ${sourcePatientId}: ${message}`);
