@@ -67,8 +67,10 @@ export interface AdministeredVaccine {
  * tb_faixa_etaria_vacinacao, tb_imunobiologico, tb_dose_imunobiologico,
  * tb_vacinacao, tb_registro_vacinacao). `findAppointmentsByPatient`
  * confirmado com uma query real do cliente contra `tb_agendado` (agenda
- * passada e futura, com status via `tb_situacao_agendado`). `findPatientByCpf`,
- * `findDocumentsByPatient` etc. continuam placeholders.
+ * passada e futura, com status via `tb_situacao_agendado`).
+ * `findDocumentsByPatient` já implementado (atestado/receita/
+ * encaminhamento — ver métodos privados abaixo); `findPatientByCpf`
+ * continua placeholder.
  */
 @Injectable()
 export class EsusPecRepository implements PatientSourceRepository, OnModuleDestroy {
@@ -380,57 +382,162 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * CONFIRMADO via DDL: `tb_receita_medicamento` (não a tabela
-   * `tb_prescricao_medicamento` chutada antes, que não existe), agrupada
-   * por atendimento — um "documento" por atendimento que gerou pelo menos
-   * uma prescrição. Nome do medicamento vem do catálogo `tb_medicamento`
-   * (tabela e relacionamento `co_medicamento` reais; nome da coluna de
-   * rótulo, `no_medicamento`, é chute por convenção).
+   * CONFIRMADO via DDL real e completo que o cliente passou pra
+   * `tb_receita_medicamento` — a cadeia até o paciente
+   * (co_atend_prof -> tb_atend_prof -> tb_atend -> tb_prontuario ->
+   * co_cidadao, via `atendProfContextJoin`) já estava certa antes; o que
+   * mudou aqui foi aproveitar os campos nativos da própria tabela que
+   * ainda não eram usados (dose/frequência, quantidade, duração/uso
+   * contínuo, interrupção, motivo via CID-10 ou CIAP — mutuamente
+   * exclusivos pela própria constraint `ck_receitamedicamento_cid_ciap`)
+   * pra montar um texto mais completo por medicamento, não só nome +
+   * posologia. Segue agrupada por atendimento — um "documento" por
+   * atendimento que gerou pelo menos uma prescrição, com um bloco de
+   * texto por medicamento.
+   *
+   * `tb_ciap` já usa o join correto (`co_seq_ciap`, não `co_ciap`, que é
+   * o código — mesmo bug encontrado e corrigido antes em
+   * `getDiagnosedConditions`). Nome do medicamento via catálogo
+   * `tb_medicamento` (tabela/relacionamento `co_medicamento` reais; nome
+   * da coluna de rótulo, `no_medicamento`, continua chute por convenção).
+   * Fora de escopo por ora (exigiriam adivinhar nome de coluna em
+   * catálogos sem DDL confirmado): `tp_receita`, `co_aplicacao_medicamento`,
+   * `qt_dose`/`co_unidade_medida_dose`, e agrupamento por
+   * `co_receita_uso_continuo_grupo` (ciclos de uso contínuo).
    */
   private async findPrescriptionDocuments(patientId: string): Promise<Document[]> {
     try {
       const rows = await this.pool.query<{
         co_seq_atend_prof: string;
-        itens: string[];
         dt_inicio: string;
+        no_medicamento: string | null;
+        no_posologia: string | null;
+        qt_receitada: number | null;
+        st_uso_continuo: number;
+        dt_inicio_tratamento: string | null;
+        dt_fim_tratamento: string | null;
+        qt_duracao_tratamento: number | null;
+        ds_dose: string | null;
+        ds_frequencia_dose: string | null;
+        st_interrompido: number;
+        ds_observacao_interrupcao: string | null;
+        dt_interrupcao: string | null;
+        qt_dose_manha: string | null;
+        qt_dose_tarde: string | null;
+        qt_dose_noite: string | null;
+        no_cid10: string | null;
+        ds_ciap: string | null;
         no_civil_profissional: string | null;
         no_cbo: string | null;
         no_unidade_saude: string | null;
       }>(
-        `SELECT ap.co_seq_atend_prof::text, array_agg(DISTINCT (med.no_medicamento || coalesce(' — ' || r.no_posologia, ''))) AS itens,
-                ap.dt_inicio, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude
+        `SELECT ap.co_seq_atend_prof::text AS co_seq_atend_prof, ap.dt_inicio, med.no_medicamento,
+                r.no_posologia, r.qt_receitada, r.st_uso_continuo, r.dt_inicio_tratamento, r.dt_fim_tratamento,
+                r.qt_duracao_tratamento, r.ds_dose, r.ds_frequencia_dose, r.st_interrompido,
+                r.ds_observacao_interrupcao, r.dt_interrupcao, r.qt_dose_manha, r.qt_dose_tarde, r.qt_dose_noite,
+                cid.no_cid10, ciap.ds_ciap, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude
          FROM public.tb_receita_medicamento r
          ${this.atendProfContextJoin.replace("{{FK}}", "r.co_atend_prof")}
          LEFT JOIN public.tb_medicamento med ON med.co_medicamento = r.co_medicamento
+         LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = r.co_cid10
+         LEFT JOIN public.tb_ciap ciap ON ciap.co_seq_ciap = r.co_ciap
          WHERE p.co_cidadao = $1
-         GROUP BY ap.co_seq_atend_prof, ap.dt_inicio, prof.no_civil_profissional, cbo.no_cbo, us.no_unidade_saude`,
+         ORDER BY ap.co_seq_atend_prof, r.co_seq_receita_medicamento`,
         [patientId],
       );
 
-      return rows.map((row) => ({
-        id: `prescription:${row.co_seq_atend_prof}`,
-        patientId,
-        title: "Receita Médica",
-        type: "prescription" as const,
-        issuedAt: row.dt_inicio,
-        professionalName: row.no_civil_profissional,
-        description: `${row.itens.length} medicamento(s)`,
-        fileUrl: null,
-        content: {
-          healthUnitName: row.no_unidade_saude,
-          professionalName: row.no_civil_profissional,
-          professionalRole: row.no_cbo,
-          cid10: null,
-          daysOff: null,
-          text: row.itens.join("\n"),
-        },
-        sourceSystem: "esus-pec" as const,
-      }));
+      const byAttendance = new Map<string, typeof rows>();
+      for (const row of rows) {
+        const list = byAttendance.get(row.co_seq_atend_prof) ?? [];
+        list.push(row);
+        byAttendance.set(row.co_seq_atend_prof, list);
+      }
+
+      return [...byAttendance.entries()].map(([atendProfId, items]) => {
+        const first = items[0]!;
+        return {
+          id: `prescription:${atendProfId}`,
+          patientId,
+          title: "Receita Médica",
+          type: "prescription" as const,
+          issuedAt: first.dt_inicio,
+          professionalName: first.no_civil_profissional,
+          description: `${items.length} medicamento(s)`,
+          fileUrl: null,
+          content: {
+            healthUnitName: first.no_unidade_saude,
+            professionalName: first.no_civil_profissional,
+            professionalRole: first.no_cbo,
+            cid10: null,
+            daysOff: null,
+            text: items.map((item) => this.formatPrescriptionItem(item)).join("\n\n"),
+          },
+          sourceSystem: "esus-pec" as const,
+        };
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Falha ao buscar receitas (tb_receita_medicamento) de ${patientId}: ${message}`);
       return [];
     }
+  }
+
+  /** Monta o bloco de texto de um medicamento prescrito pros detalhes nativos confirmados em tb_receita_medicamento. */
+  private formatPrescriptionItem(row: {
+    no_medicamento: string | null;
+    no_posologia: string | null;
+    qt_receitada: number | null;
+    st_uso_continuo: number;
+    dt_inicio_tratamento: string | null;
+    dt_fim_tratamento: string | null;
+    qt_duracao_tratamento: number | null;
+    ds_dose: string | null;
+    ds_frequencia_dose: string | null;
+    st_interrompido: number;
+    ds_observacao_interrupcao: string | null;
+    dt_interrupcao: string | null;
+    qt_dose_manha: string | null;
+    qt_dose_tarde: string | null;
+    qt_dose_noite: string | null;
+    no_cid10: string | null;
+    ds_ciap: string | null;
+  }): string {
+    const lines = [row.no_medicamento ?? "Medicamento não identificado"];
+
+    const periods = [
+      row.qt_dose_manha ? `manhã: ${row.qt_dose_manha}` : null,
+      row.qt_dose_tarde ? `tarde: ${row.qt_dose_tarde}` : null,
+      row.qt_dose_noite ? `noite: ${row.qt_dose_noite}` : null,
+    ].filter((p): p is string => !!p);
+
+    const dose =
+      row.ds_dose || row.ds_frequencia_dose
+        ? [row.ds_dose, row.ds_frequencia_dose].filter(Boolean).join(" — ")
+        : periods.length > 0
+          ? periods.join(", ")
+          : row.no_posologia;
+    if (dose) lines.push(dose);
+
+    if (row.qt_receitada != null) lines.push(`Quantidade: ${row.qt_receitada}`);
+
+    if (row.st_uso_continuo === 1) {
+      lines.push("Uso contínuo");
+    } else if (row.dt_inicio_tratamento && row.dt_fim_tratamento) {
+      lines.push(`Tratamento: ${this.formatBrDate(row.dt_inicio_tratamento)} a ${this.formatBrDate(row.dt_fim_tratamento)}`);
+    } else if (row.qt_duracao_tratamento) {
+      lines.push(`Duração: ${row.qt_duracao_tratamento} dia(s)`);
+    }
+
+    if (row.st_interrompido === 1) {
+      const when = row.dt_interrupcao ? ` em ${this.formatBrDate(row.dt_interrupcao)}` : "";
+      const why = row.ds_observacao_interrupcao ? `: ${row.ds_observacao_interrupcao}` : "";
+      lines.push(`Interrompido${when}${why}`);
+    }
+
+    const reason = row.no_cid10 ?? row.ds_ciap;
+    if (reason) lines.push(`Motivo: ${reason}`);
+
+    return lines.join("\n");
   }
 
   private async findReferralDocuments(patientId: string): Promise<Document[]> {
@@ -995,6 +1102,17 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       this.logger.warn(`Falha ao buscar condições diagnosticadas (tb_problema/tb_ciap) de ${sourcePatientId}: ${message}`);
       return null;
     }
+  }
+
+  /**
+   * Formata uma data (date/timestamp do Postgres) como dd/mm/aaaa — usado
+   * só pra montar texto livre (ex. `DocumentContent.text` da receita),
+   * onde o valor já sai pronto pra exibir; campos estruturados continuam
+   * em ISO pro frontend formatar.
+   */
+  private formatBrDate(raw: string | null): string | null {
+    if (!raw) return null;
+    return new Date(raw).toLocaleDateString("pt-BR");
   }
 
   /**

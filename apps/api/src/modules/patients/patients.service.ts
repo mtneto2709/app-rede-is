@@ -52,13 +52,14 @@ export class PatientsService {
     const link = await this.requireLink(userId);
     const repo = this.repositoryFor(link.sourceSystem);
 
-    const [appointments, attendances, documents, profile, cns] = await Promise.all([
+    const [appointments, attendances, profile, cns] = await Promise.all([
       repo.findAppointmentsByPatient(link.sourcePatientId),
       repo.findAttendancesByPatient(link.sourcePatientId),
-      repo.findDocumentsByPatient(link.sourcePatientId),
       repo.getIdentityProfile(link.sourcePatientId),
       repo.getPatientCns(link.sourcePatientId),
     ]);
+    const esusCitizenId = await this.resolveEsusCitizenId(link);
+    const documents = esusCitizenId ? await this.esusPec.findDocumentsByPatient(esusCitizenId) : [];
     const tableAlerts = await this.tables.findAlertsByPatient(profile?.cpf ?? null, cns);
 
     await this.logRead(tenantId, userId, "patients.dashboard.read", ip);
@@ -88,9 +89,11 @@ export class PatientsService {
     return result;
   }
 
+  /** Documentos (receita, atestado, encaminhamento...) vivem só no e-SUS PEC, igual Vacinação/Minha Saúde — ver resolveEsusCitizenId. */
   async getDocuments(tenantId: string, userId: string, ip?: string) {
     const link = await this.requireLink(userId);
-    const result = await this.repositoryFor(link.sourceSystem).findDocumentsByPatient(link.sourcePatientId);
+    const esusCitizenId = await this.resolveEsusCitizenId(link);
+    const result = esusCitizenId ? await this.esusPec.findDocumentsByPatient(esusCitizenId) : [];
     await this.logRead(tenantId, userId, "patients.documents.read", ip);
     return result;
   }
