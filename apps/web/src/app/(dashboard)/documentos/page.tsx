@@ -117,8 +117,12 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold">{exam.name}</p>
                   {exam.conferred != null && (
-                    <span className={`text-[10px] font-semibold shrink-0 ${exam.conferred ? "text-success" : "text-warning"}`}>
-                      {exam.conferred ? "Conferido" : "Aguardando conferência"}
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                        exam.conferred ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
+                      }`}
+                    >
+                      {exam.conferred ? "Avaliado" : "Solicitado"}
                     </span>
                   )}
                 </div>

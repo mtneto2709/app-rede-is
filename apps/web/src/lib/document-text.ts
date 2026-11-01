@@ -28,7 +28,7 @@ export function buildDocumentText(doc: Document): string {
     lines.push("");
     for (const exam of doc.content.exams) {
       lines.push(exam.name);
-      if (exam.conferred != null) lines.push(exam.conferred ? "Conferido" : "Aguardando conferência");
+      if (exam.conferred != null) lines.push(exam.conferred ? "Avaliado" : "Solicitado");
       if (exam.requestedAt) lines.push(`Solicitado em ${new Date(exam.requestedAt).toLocaleDateString("pt-BR")}`);
       if (exam.performedAt) lines.push(`Realizado em ${new Date(exam.performedAt).toLocaleDateString("pt-BR")}`);
       if (exam.resultAt) lines.push(`Resultado em ${new Date(exam.resultAt).toLocaleDateString("pt-BR")}`);

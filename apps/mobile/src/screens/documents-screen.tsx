@@ -53,7 +53,7 @@ function buildDocumentText(doc: Document): string {
     lines.push("");
     for (const exam of doc.content.exams) {
       lines.push(exam.name);
-      if (exam.conferred != null) lines.push(exam.conferred ? "Conferido" : "Aguardando conferência");
+      if (exam.conferred != null) lines.push(exam.conferred ? "Avaliado" : "Solicitado");
       if (exam.requestedAt) lines.push(`Solicitado em ${new Date(exam.requestedAt).toLocaleDateString("pt-BR")}`);
       if (exam.performedAt) lines.push(`Realizado em ${new Date(exam.performedAt).toLocaleDateString("pt-BR")}`);
       if (exam.resultAt) lines.push(`Resultado em ${new Date(exam.resultAt).toLocaleDateString("pt-BR")}`);
@@ -164,15 +164,24 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
                         {exam.name}
                       </Text>
                       {exam.conferred != null && (
-                        <Text
+                        <View
                           style={{
-                            fontSize: 10,
-                            fontWeight: "700",
-                            color: exam.conferred ? theme.colors.success : theme.colors.warning,
+                            backgroundColor: withAlpha(exam.conferred ? theme.colors.success : theme.colors.warning, "1A"),
+                            borderRadius: 999,
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
                           }}
                         >
-                          {exam.conferred ? "Conferido" : "Aguardando conferência"}
-                        </Text>
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "700",
+                              color: exam.conferred ? theme.colors.success : theme.colors.warning,
+                            }}
+                          >
+                            {exam.conferred ? "Avaliado" : "Solicitado"}
+                          </Text>
+                        </View>
                       )}
                     </View>
                     {exam.requestedAt && (

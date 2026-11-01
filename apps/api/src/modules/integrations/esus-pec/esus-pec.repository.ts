@@ -533,6 +533,17 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     no_cid10: string | null;
     ds_ciap: string | null;
   }): PrescriptionMedicationItem {
+    // BUG REAL já visto em produção: a prioridade estava errada — os
+    // campos discretos de período (qt_dose_manha/tarde/noite) vinham antes
+    // de no_posologia, mas no_posologia é quem tem o texto completo e
+    // correto digitado/gerado no e-SUS (ex. "5 comprimidos a cada 1 dia,
+    // sendo: 2 comprimidos pela manhã, 1 comprimido pela tarde e 2
+    // comprimidos pela noite" — confirmado pelo cliente direto na base,
+    // tb_receita_medicamento.no_posologia). Virou a linha errada
+    // "manhã: 2, tarde: 1, noite: 2" (perdendo "comprimidos", "a cada 1
+    // dia" etc.). Corrigido: no_posologia tem prioridade; os demais campos
+    // (ds_dose/ds_frequencia_dose, períodos discretos) só entram como
+    // fallback se a base não tiver no_posologia preenchido.
     const periods = [
       row.qt_dose_manha ? `manhã: ${row.qt_dose_manha}` : null,
       row.qt_dose_tarde ? `tarde: ${row.qt_dose_tarde}` : null,
@@ -540,11 +551,12 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     ].filter((p): p is string => !!p);
 
     const dose =
-      row.ds_dose || row.ds_frequencia_dose
+      row.no_posologia ||
+      (row.ds_dose || row.ds_frequencia_dose
         ? [row.ds_dose, row.ds_frequencia_dose].filter(Boolean).join(" — ")
         : periods.length > 0
           ? periods.join(", ")
-          : row.no_posologia;
+          : null);
 
     const continuousUse = row.st_uso_continuo === 1;
     let duration: string | null = null;
