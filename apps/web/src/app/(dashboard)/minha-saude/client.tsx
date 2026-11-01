@@ -1,10 +1,11 @@
 "use client";
 
-import { HeartPulse, Pill, FlaskConical, AlertTriangle, Activity, Weight, Ruler, Thermometer, Droplet } from "lucide-react";
+import { HeartPulse, ClipboardList, Pill, FlaskConical, AlertTriangle, Activity, Weight, Ruler, Thermometer, Droplet } from "lucide-react";
 import type { HealthSummary } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function formatDate(iso: string | null): string | null {
@@ -104,6 +105,25 @@ export function HealthSummaryPageClient() {
                       {c.startedAt && (
                         <p className="text-xs text-text-secondary mt-0.5">Início: {formatDate(c.startedAt)}</p>
                       )}
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-secondary" />
+                <h2 className="text-sm font-bold">Condições de saúde autorreferidas</h2>
+              </div>
+              {data.selfReportedConditions.length === 0 ? (
+                <p className="text-xs text-text-secondary">Nenhuma condição autorreferida registrada.</p>
+              ) : (
+                <div className="space-y-2">
+                  {data.selfReportedConditions.map((c) => (
+                    <Card key={c.id} className="p-3 flex items-center justify-between gap-2">
+                      <p className="text-sm">{c.label}</p>
+                      <Badge tone="neutral" className="shrink-0">Auto referido</Badge>
                     </Card>
                   ))}
                 </div>

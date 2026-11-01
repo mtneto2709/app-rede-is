@@ -282,6 +282,8 @@ export type VitalMeasurements = z.infer<typeof VitalMeasurements>;
 export const HealthSummary = z.object({
   available: z.boolean(),
   conditions: z.array(HealthCondition),
+  /** Condições de saúde autorreferidas pelo próprio cidadão (tb_condicoes_saude_auto, e-SUS PEC) — exibidas com badge "Auto referido", separadas de `conditions` (diagnosticadas/CDS) pra não misturar a fonte da informação. */
+  selfReportedConditions: z.array(HealthCondition),
   medications: z.array(ContinuousMedication),
   exams: z.array(ExamResult),
   allergies: z.array(AllergyEntry),

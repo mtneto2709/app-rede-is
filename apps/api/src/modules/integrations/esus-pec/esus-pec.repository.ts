@@ -752,9 +752,10 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    *    confirmado na própria `tb_alergia`) se o catálogo não bater.
    */
   async getHealthSummary(sourcePatientId: string): Promise<HealthSummaryResult> {
-    const [selfReported, diagnosed, measurements, medications, allergies] = await Promise.all([
+    const [selfReported, diagnosed, autoReportedConditions, measurements, medications, allergies] = await Promise.all([
       this.getSelfReportedConditions(sourcePatientId),
       this.getDiagnosedConditions(sourcePatientId),
+      this.getAutoReportedHealthConditions(sourcePatientId),
       this.getVitalMeasurements(sourcePatientId),
       this.getMedicationsInUse(sourcePatientId),
       this.getAllergies(sourcePatientId),
@@ -763,11 +764,20 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     if (
       selfReported === null &&
       diagnosed === null &&
+      autoReportedConditions === null &&
       measurements === null &&
       medications === null &&
       allergies === null
     ) {
-      return { available: false, conditions: [], medications: [], exams: [], allergies: [], measurements: null };
+      return {
+        available: false,
+        conditions: [],
+        selfReportedConditions: [],
+        medications: [],
+        exams: [],
+        allergies: [],
+        measurements: null,
+      };
     }
 
     const seen = new Set<string>();
@@ -781,6 +791,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     return {
       available: true,
       conditions,
+      selfReportedConditions: autoReportedConditions ?? [],
       medications: medications ?? [],
       exams: [],
       allergies: allergies ?? [],
@@ -829,6 +840,81 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Falha ao buscar condições auto-relatadas (tb_cds_cad_individual) de ${sourcePatientId}: ${message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Condições de saúde autorreferidas — CONFIRMADO via DDL do cliente:
+   * `tb_condicoes_saude_auto`, um registro por cidadão (`uk_condicoesauto_cidadao`
+   * é UNIQUE em `co_cidadao`, não precisa de ORDER BY/LIMIT como
+   * `tb_cds_cad_individual`). Mapeia só as flags de doença/condição
+   * (`st_*`) + os três campos de texto livre (`condicao_saude1/2/3`) —
+   * deixa de fora, por ora, flags de hábito/situação que não são
+   * "condição de saúde" propriamente (fumante, uso de álcool/drogas,
+   * gestante, acamado, atendimento domiciliar, internação recente,
+   * plantas medicinais): dá pra mapear depois se fizer sentido numa seção
+   * própria. Resultado mantido separado de `conditions` (ver
+   * `getHealthSummary`) — cada item aqui ganha o badge "Auto referido" no
+   * app.
+   */
+  private async getAutoReportedHealthConditions(sourcePatientId: string): Promise<HealthCondition[] | null> {
+    try {
+      const rows = await this.pool.query<{
+        st_hipertensao_arterial: number | null;
+        st_diabetes: number | null;
+        st_cancer: number | null;
+        st_derrame: number | null;
+        st_infarto: number | null;
+        st_hanseniase: number | null;
+        st_tuberculose: number | null;
+        st_doenca_cardiaca: number | null;
+        st_problema_rins: number | null;
+        st_doenca_respiratoria: number | null;
+        st_problema_saude_mental: number | null;
+        condicao_saude1: string | null;
+        condicao_saude2: string | null;
+        condicao_saude3: string | null;
+      }>(
+        `SELECT st_hipertensao_arterial, st_diabetes, st_cancer, st_derrame, st_infarto, st_hanseniase,
+                st_tuberculose, st_doenca_cardiaca, st_problema_rins, st_doenca_respiratoria,
+                st_problema_saude_mental, condicao_saude1, condicao_saude2, condicao_saude3
+         FROM public.tb_condicoes_saude_auto
+         WHERE co_cidadao = $1
+         LIMIT 1`,
+        [sourcePatientId],
+      );
+
+      const row = rows[0];
+      if (!row) return [];
+
+      const flags: [number | null, string][] = [
+        [row.st_hipertensao_arterial, "Hipertensão arterial"],
+        [row.st_diabetes, "Diabetes"],
+        [row.st_cancer, "Câncer"],
+        [row.st_derrame, "Derrame"],
+        [row.st_infarto, "Infarto"],
+        [row.st_hanseniase, "Hanseníase"],
+        [row.st_tuberculose, "Tuberculose"],
+        [row.st_doenca_cardiaca, "Doença cardíaca"],
+        [row.st_problema_rins, "Problema nos rins"],
+        [row.st_doenca_respiratoria, "Doença respiratória"],
+        [row.st_problema_saude_mental, "Problema de saúde mental"],
+      ];
+      const conditions = flags
+        .filter(([value]) => value === 1)
+        .map(([, label]) => ({ id: `auto-reported:${label}`, label, startedAt: null }));
+
+      [row.condicao_saude1, row.condicao_saude2, row.condicao_saude3].forEach((text, index) => {
+        if (text?.trim()) {
+          conditions.push({ id: `auto-reported:livre-${index + 1}`, label: text.trim(), startedAt: null });
+        }
+      });
+
+      return conditions;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Falha ao buscar condições autorreferidas (tb_condicoes_saude_auto) de ${sourcePatientId}: ${message}`);
       return null;
     }
   }

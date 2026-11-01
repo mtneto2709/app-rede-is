@@ -42,6 +42,8 @@ export interface IdentityProfile {
 export interface HealthSummaryResult {
   available: boolean;
   conditions: HealthCondition[];
+  /** Condições de saúde autorreferidas (tb_condicoes_saude_auto) — ver comentário em HealthSummary (shared-types). */
+  selfReportedConditions: HealthCondition[];
   medications: ContinuousMedication[];
   exams: ExamResult[];
   allergies: AllergyEntry[];

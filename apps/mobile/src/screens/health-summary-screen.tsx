@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { HealthSummary } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
+import { withAlpha } from "@/theme/tone";
 import { ScreenHeader } from "@/components/screen-header";
 import { Card } from "@/components/screen-list";
 
@@ -130,6 +131,36 @@ export function HealthSummaryScreen() {
                         Início: {formatDate(c.startedAt)}
                       </Text>
                     )}
+                  </Card>
+                ))
+              )}
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="clipboard-outline" size={16} color={theme.colors.secondary} />
+                <Text style={{ fontSize: 14, fontWeight: "700", color: theme.colors.textPrimary }}>
+                  Condições de saúde autorreferidas
+                </Text>
+              </View>
+              {data.selfReportedConditions.length === 0 ? (
+                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                  Nenhuma condição autorreferida registrada.
+                </Text>
+              ) : (
+                data.selfReportedConditions.map((c) => (
+                  <Card key={c.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <Text style={{ fontSize: 13, color: theme.colors.textPrimary, flex: 1 }}>{c.label}</Text>
+                    <View
+                      style={{
+                        backgroundColor: withAlpha(theme.colors.textSecondary, "1A"),
+                        borderRadius: 999,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <Text style={{ color: theme.colors.textSecondary, fontSize: 10, fontWeight: "700" }}>Auto referido</Text>
+                    </View>
                   </Card>
                 ))
               )}
