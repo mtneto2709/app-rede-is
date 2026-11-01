@@ -307,14 +307,30 @@ export class QuestionnaireService {
     });
   }
 
-  /** Primeiro passo: acha o(s) cadastro(s) e monta o questionário direto se houver só um. */
-  async start(userId: string, tenantId: string, contact: string, channel: AuthChannel): Promise<StartQuestionnaireResult> {
-    const attemptsCount = await this.prisma.questionnaireAttempt.count({ where: { userId } });
+  /**
+   * Conta só tentativas REALMENTE respondidas (resolvedAt setado em
+   * submit()) — cada chamada a createAttempt() cria uma linha só de montar
+   * o questionário, então contar todas as linhas aqui bloqueava o usuário
+   * depois de só recarregar a tela 3 vezes, sem nunca ter respondido uma
+   * pergunta sequer. Chamado tanto de start() (saída antecipada, evita
+   * consultar Sistema IS/e-SUS à toa se o usuário já está bloqueado) quanto
+   * de dentro de createAttempt() (ponto único onde a tentativa é de fato
+   * criada — cobre também selectCandidate(), que antes não checava nada).
+   */
+  private async assertAttemptsAvailable(userId: string): Promise<void> {
+    const attemptsCount = await this.prisma.questionnaireAttempt.count({
+      where: { userId, resolvedAt: { not: null } },
+    });
     if (attemptsCount >= MAX_ATTEMPTS_PER_USER) {
       throw new UnauthorizedException(
         "Número máximo de tentativas de validação excedido. Procure o suporte do seu município.",
       );
     }
+  }
+
+  /** Primeiro passo: acha o(s) cadastro(s) e monta o questionário direto se houver só um. */
+  async start(userId: string, tenantId: string, contact: string, channel: AuthChannel): Promise<StartQuestionnaireResult> {
+    await this.assertAttemptsAvailable(userId);
 
     const { candidates, errors } = await this.findCandidates(contact);
     if (candidates.length === 0) {
@@ -356,6 +372,8 @@ export class QuestionnaireService {
     sourcePatientId: string,
     channel: AuthChannel,
   ): Promise<QuestionnaireReadyResult> {
+    await this.assertAttemptsAvailable(userId);
+
     const profile = await this.repositoryFor(sourceSystem)
       .getIdentityProfile(sourcePatientId)
       .catch((err) => {
