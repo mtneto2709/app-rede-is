@@ -20,6 +20,7 @@ import {
   classifyAttendanceType,
 } from "../../../common/utils/attendance-classification";
 import { classifyHealthUnitType } from "../../../common/utils/health-unit-classification";
+import { classifyDiagnosedCondition } from "../../../common/utils/diagnosed-condition-classification";
 import type {
   HealthSummaryResult,
   IdentityCandidate,
@@ -948,42 +949,50 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * Problemas/condições diagnosticados — CONFIRMADO via DDL do cliente:
-   * `tb_problema` (o problema em si, ligado direto a `tb_prontuario`,
-   * codificado em CID-10 ou CIAP2, ou texto livre em `ds_outro` quando
-   * nenhum dos dois se aplica) + `tb_problema_evolucao` (a evolução mais
-   * recente, via `co_ultimo_problema_evolucao`, de onde vem a data real de
-   * início — `dt_inicio_problema`, confirmada). `no_ciap` segue o mesmo
-   * chute de nome de coluna já usado em `findAttendanceRows` (a tabela e o
-   * relacionamento são reais, o nome da coluna de rótulo é convenção).
+   * Problemas/condições diagnosticados em atendimento (CIAP2) — CONFIRMADO
+   * via SELECT real do cliente, que corrigiu o join de `tb_ciap` que a
+   * gente estava chutando errado: o PK de `tb_ciap` é `co_seq_ciap`, e
+   * `co_ciap` é o CÓDIGO (ex. "K86"), não o PK — `tb_problema.co_ciap`
+   * referencia `tb_ciap.co_seq_ciap`. O join antigo (`tb_ciap.co_ciap =
+   * tb_problema.co_ciap`) nunca batia, então todo problema codificado só
+   * em CIAP (sem CID-10) ficava de fora da seção silenciosamente.
+   *
+   * Classifica pelo código CIAP numa lista fechada de 15 códigos
+   * confirmada pelo cliente (ver `classifyDiagnosedCondition`) — rótulo
+   * padronizado (ex. "Hipertensão"), não mais o texto cru do catálogo
+   * CID-10/CIAP. Diagnóstico fora dessa lista (outro CIAP, só CID-10, ou
+   * só `ds_outro`) não entra nesta seção por ora — o pedido do cliente foi
+   * especificamente mapear esses 15 códigos.
+   *
+   * `tb_problema_evolucao` (via `co_ultimo_problema_evolucao`) continua
+   * dando a data real de início (`dt_inicio_problema`, já confirmada
+   * antes) — não fazia parte do SELECT do cliente (focado em
+   * classificação/contagem), mas mantida aqui por já funcionar.
    */
   private async getDiagnosedConditions(sourcePatientId: string): Promise<HealthCondition[] | null> {
     try {
       const rows = await this.pool.query<{
         co_seq_problema: string;
-        no_cid10: string | null;
-        no_ciap: string | null;
-        ds_outro: string | null;
+        co_ciap: string | null;
         dt_inicio_problema: string | null;
       }>(
-        `SELECT DISTINCT pr.co_seq_problema::text AS co_seq_problema, cid.no_cid10, ciap.no_ciap, pr.ds_outro,
-                ev.dt_inicio_problema
+        `SELECT pr.co_seq_problema::text AS co_seq_problema, ci.co_ciap, ev.dt_inicio_problema
          FROM public.tb_problema pr
          INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = pr.co_prontuario
-         LEFT JOIN public.tb_cid10 cid ON cid.co_cid10 = pr.co_cid10
-         LEFT JOIN public.tb_ciap ciap ON ciap.co_ciap = pr.co_ciap
+         LEFT JOIN public.tb_ciap ci ON ci.co_seq_ciap = pr.co_ciap
          LEFT JOIN public.tb_problema_evolucao ev ON ev.co_seq_problema_evolucao = pr.co_ultimo_problema_evolucao
-         WHERE p.co_cidadao = $1`,
+         WHERE p.co_cidadao = $1
+           AND UPPER(TRIM(ci.co_ciap)) IN ('K86','K87','T90','K77','K74','K84','K90','K75','R96','R95','R99','U99','A79','A70','A78')`,
         [sourcePatientId],
       );
 
       return rows
-        .map((row) => ({ ...row, label: row.no_cid10 ?? row.no_ciap ?? row.ds_outro }))
+        .map((row) => ({ ...row, label: classifyDiagnosedCondition(row.co_ciap) }))
         .filter((row): row is typeof row & { label: string } => !!row.label)
         .map((row) => ({ id: `diagnosed:${row.co_seq_problema}`, label: row.label, startedAt: row.dt_inicio_problema }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.warn(`Falha ao buscar condições diagnosticadas (tb_problema/tb_problema_evolucao) de ${sourcePatientId}: ${message}`);
+      this.logger.warn(`Falha ao buscar condições diagnosticadas (tb_problema/tb_ciap) de ${sourcePatientId}: ${message}`);
       return null;
     }
   }
