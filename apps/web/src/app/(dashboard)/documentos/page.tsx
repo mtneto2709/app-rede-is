@@ -89,9 +89,21 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
           <div className="space-y-2">
             {doc.content.medications.map((med) => (
               <Card key={med.id} className="p-3 space-y-1 border-l-4 border-l-success">
-                <p className="text-sm font-semibold">{med.name}</p>
-                {med.dose && <p className="text-xs text-text-secondary">{med.dose}</p>}
-                {med.quantity && <p className="text-xs text-text-secondary">{med.quantity}</p>}
+                <p className="text-sm font-semibold">
+                  {med.name}
+                  {med.strength && <span style={{ color: "#333333" }}> {med.strength}</span>}
+                </p>
+                {med.dose && <p className="text-xs text-text-secondary italic">{med.dose}</p>}
+                {(med.quantity || med.continuousUse) && (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-text-secondary">{med.quantity}</p>
+                    {med.continuousUse && (
+                      <span className="shrink-0 rounded-full bg-success/10 px-2.5 py-1 text-[10px] font-bold text-success">
+                        Uso Contínuo
+                      </span>
+                    )}
+                  </div>
+                )}
                 {med.duration && <p className="text-xs text-text-secondary">{med.duration}</p>}
                 {med.interrupted && <p className="text-xs text-danger">{med.interrupted}</p>}
                 {med.reason && <p className="text-xs text-text-secondary">{med.reason}</p>}

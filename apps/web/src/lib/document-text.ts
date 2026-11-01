@@ -18,8 +18,8 @@ export function buildDocumentText(doc: Document): string {
   if (doc.content?.medications && doc.content.medications.length > 0) {
     lines.push("");
     for (const med of doc.content.medications) {
-      lines.push(med.name);
-      for (const extra of [med.dose, med.quantity, med.duration, med.interrupted, med.reason]) {
+      lines.push(med.strength ? `${med.name} ${med.strength}` : med.name);
+      for (const extra of [med.dose, med.quantity, med.continuousUse ? "Uso Contínuo" : null, med.duration, med.interrupted, med.reason]) {
         if (extra) lines.push(extra);
       }
       lines.push("");

@@ -546,13 +546,14 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
           ? periods.join(", ")
           : row.no_posologia;
 
+    const continuousUse = row.st_uso_continuo === 1;
     let duration: string | null = null;
-    if (row.st_uso_continuo === 1) {
-      duration = "Uso contínuo";
-    } else if (row.dt_inicio_tratamento && row.dt_fim_tratamento) {
-      duration = `Tratamento: ${this.formatBrDate(row.dt_inicio_tratamento)} a ${this.formatBrDate(row.dt_fim_tratamento)}`;
-    } else if (row.qt_duracao_tratamento) {
-      duration = `Duração: ${row.qt_duracao_tratamento} dia(s)`;
+    if (!continuousUse) {
+      if (row.dt_inicio_tratamento && row.dt_fim_tratamento) {
+        duration = `Tratamento: ${this.formatBrDate(row.dt_inicio_tratamento)} a ${this.formatBrDate(row.dt_fim_tratamento)}`;
+      } else if (row.qt_duracao_tratamento) {
+        duration = `Duração: ${row.qt_duracao_tratamento} dia(s)`;
+      }
     }
 
     let interrupted: string | null = null;
@@ -566,18 +567,23 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
 
     const reason = row.no_cid10 ?? row.ds_ciap;
 
-    // Sem coluna de nome única em tb_medicamento: princípio ativo
-    // (obrigatória) + concentração + unidade de fornecimento, ex.
-    // "Losartana Potássica 50mg (comprimido)".
-    let name = row.no_principio_ativo ?? "Medicamento não identificado";
-    if (row.ds_concentracao) name += ` ${row.ds_concentracao}`;
-    if (row.ds_unidade_fornecimento) name += ` (${row.ds_unidade_fornecimento})`;
+    // Sem coluna de nome única em tb_medicamento: princípio ativo é o
+    // nome (obrigatória); concentração + unidade de fornecimento vão em
+    // `strength`, separado, pra UI estilizar com menos ênfase — ex. nome
+    // "Losartana Potássica", strength "50mg (comprimido)".
+    const name = row.no_principio_ativo ?? "Medicamento não identificado";
+    const strength =
+      [row.ds_concentracao, row.ds_unidade_fornecimento ? `(${row.ds_unidade_fornecimento})` : null]
+        .filter((part): part is string => !!part)
+        .join(" ") || null;
 
     return {
       id: `prescription-item:${row.co_seq_receita_medicamento}`,
       name,
+      strength,
       dose: dose ?? null,
       quantity: row.qt_receitada != null ? `Quantidade: ${row.qt_receitada}` : null,
+      continuousUse,
       duration,
       interrupted,
       reason: reason ? `Motivo: ${reason}` : null,

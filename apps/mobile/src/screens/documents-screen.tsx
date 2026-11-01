@@ -43,8 +43,8 @@ function buildDocumentText(doc: Document): string {
   if (doc.content?.medications && doc.content.medications.length > 0) {
     lines.push("");
     for (const med of doc.content.medications) {
-      lines.push(med.name);
-      for (const extra of [med.dose, med.quantity, med.duration, med.interrupted, med.reason]) {
+      lines.push(med.strength ? `${med.name} ${med.strength}` : med.name);
+      for (const extra of [med.dose, med.quantity, med.continuousUse ? "Uso Contínuo" : null, med.duration, med.interrupted, med.reason]) {
         if (extra) lines.push(extra);
       }
       lines.push("");
@@ -125,9 +125,30 @@ function DocumentViewer({ doc, onClose }: { doc: Document; onClose: () => void }
               <View style={{ gap: 8 }}>
                 {doc.content.medications.map((med) => (
                   <Card key={med.id} style={{ borderLeftWidth: 4, borderLeftColor: theme.colors.success, gap: 2 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.textPrimary }}>{med.name}</Text>
-                    {med.dose && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.dose}</Text>}
-                    {med.quantity && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.quantity}</Text>}
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.colors.textPrimary }}>
+                      {med.name}
+                      {med.strength ? <Text style={{ fontWeight: "700", color: "#333333" }}> {med.strength}</Text> : null}
+                    </Text>
+                    {med.dose && (
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontStyle: "italic" }}>{med.dose}</Text>
+                    )}
+                    {(med.quantity || med.continuousUse) && (
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.quantity}</Text>
+                        {med.continuousUse && (
+                          <View
+                            style={{
+                              backgroundColor: withAlpha(theme.colors.success, "1A"),
+                              borderRadius: 999,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                            }}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: theme.colors.success }}>Uso Contínuo</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                     {med.duration && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.duration}</Text>}
                     {med.interrupted && <Text style={{ fontSize: 12, color: theme.colors.danger }}>{med.interrupted}</Text>}
                     {med.reason && <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{med.reason}</Text>}

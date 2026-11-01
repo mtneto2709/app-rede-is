@@ -160,12 +160,17 @@ export type VaccinationCardResponse = z.infer<typeof VaccinationCardResponse>;
 /** Um medicamento prescrito numa receita — cada um vira um card próprio na tela, em vez de texto corrido. */
 export const PrescriptionMedicationItem = z.object({
   id: z.string(),
+  /** Só o princípio ativo — concentração/unidade vêm em `strength`, pra estilizar separado (nome em destaque, resto em tom mais claro). */
   name: z.string(),
+  /** Concentração + unidade de fornecimento combinadas, ex. "500 mg (Comprimido)" — null quando a base não tiver nenhuma das duas. */
+  strength: z.string().nullable(),
   /** Dose/frequência já formatada pra exibir (ex. "1 comprimido — uma vez ao dia"), ou null se a base não tiver essa informação estruturada nem posologia em texto livre. */
   dose: z.string().nullable(),
   /** Já formatado como "Quantidade: N". */
   quantity: z.string().nullable(),
-  /** Uso contínuo, período de tratamento ou duração em dias — já formatado, uma linha só. */
+  /** true quando é uso contínuo — vira badge na UI, em vez de texto em `duration`. */
+  continuousUse: z.boolean(),
+  /** Período de tratamento ou duração em dias já formatado, uma linha só — null quando for uso contínuo (ver `continuousUse`) ou a base não informar. */
   duration: z.string().nullable(),
   /** Já formatado ("Interrompido em dd/mm/aaaa: motivo") — null quando não foi interrompido. */
   interrupted: z.string().nullable(),
