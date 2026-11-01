@@ -21,6 +21,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # pnpm não roda scripts de build de pacotes por padrão (ex.: o
+      # postinstall do @prisma/client, que gera o client a partir do
+      # schema) — sem isso, PrismaService nem compila (PrismaClient não
+      # existe em @prisma/client). Não precisa de banco real: `generate`
+      # só lê prisma/schema.prisma, não conecta em CONTROL_DATABASE_URL.
+      - name: Gerar Prisma Client
+        run: pnpm --filter @rede-is/api run prisma:generate
+
       - name: Lint
         run: pnpm lint
 
