@@ -668,10 +668,38 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
    * (provável código SIGTAP), não `bigint` como o resto da cadeia — o
    * join sem cast quebrava a query inteira ("operator does not exist:
    * character varying = bigint"), derrubando a busca de exames inteira
-   * silenciosamente (capturada pelo catch abaixo). Por isso o join casta
-   * os dois lados pra `text` em vez de comparar direto. `ds_resultado`/
-   * `ds_observacao` passam por `htmlToText` por precaução (mesmo tipo de
-   * campo livre que já veio com HTML cru em `tb_atestado.ds_atestado`).
+   * silenciosamente (capturada pelo catch abaixo). SEGUNDO BUG REAL, visto
+   * depois do cast: comparar como `::text` ainda não casava nenhuma linha
+   * ("Exame não identificado" sempre) — código SIGTAP é zero-padded (ex.
+   * `"0202010406"`) em `tb_proced.co_proced` (varchar), enquanto
+   * `tb_exame_requisitado.co_proced` (bigint) não tem zero à esquerda
+   * (`202010406`), então o `::text` dos dois nunca batia. Corrigido
+   * comparando como `::bigint` dos dois lados (valor numérico, ignora
+   * zero à esquerda) — com guarda via regex pra não quebrar a query se
+   * algum código do catálogo não for puramente numérico.
+   *
+   * Resultado estruturado: além do texto livre `ds_resultado`, o e-SUS
+   * grava o valor de alguns tipos de exame em tabelas próprias de
+   * relacionamento 1:1 com `tb_exame_requisitado` via `co_exame_requisitado`
+   * — mesma estrutura em todas (confirmado pelo cliente, com DDL completo
+   * de `tb_exame_clearance_creatina` como exemplo): FK
+   * `co_exame_requisitado` + uma coluna de valor `vl_<nome da tabela sem
+   * o prefixo tb_exame_>. Mapeadas aqui as 7 tabelas dessa família que o
+   * cliente confirmou seguirem essa lógica (`tb_exame_detalhe`,
+   * `tb_exame_detalhe_resultado`, `tb_exame_prenatal` e
+   * `tb_exame_puericultura` ficam de fora — estrutura diferente, não
+   * confirmada). Nome da coluna de valor confirmado via DDL só pra
+   * `tb_exame_clearance_creatina` (`vl_clearance_creatina`); as outras 6
+   * seguem a mesma convenção descrita pelo cliente, mas sem DDL individual
+   * — se alguma tiver nome diferente, a query inteira quebra (capturada
+   * pelo catch) e aparece nos logs da API. `COALESCE` pega a que bater (no
+   * máximo uma, já que cada exame é de um tipo só); quando nenhuma bate
+   * (exame sem tabela própria, ou ainda sem resultado), cai pro texto
+   * livre `ds_resultado`.
+   *
+   * `ds_resultado`/`ds_observacao` passam por `htmlToText` por precaução
+   * (mesmo tipo de campo livre que já veio com HTML cru em
+   * `tb_atestado.ds_atestado`).
    * Fora de escopo por ora (exigiriam adivinhar coluna em catálogo sem
    * DDL confirmado, ou são anexo de arquivo, não dado estruturado):
    * `co_proced_exame_especifico`, `co_arquivo_atendprof`.
@@ -692,16 +720,23 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
         no_cbo_sol: string | null;
         no_civil_profissional_res: string | null;
         no_cbo_res: string | null;
+        vl_resultado_estruturado: number | null;
       }>(
         `SELECT er.co_seq_exame_requisitado::text AS co_seq_exame_requisitado,
                 er.co_requisicao_exame::text AS co_requisicao_exame,
                 er.st_conferido, er.dt_solicitacao, er.dt_realizacao, er.dt_resultado,
                 er.ds_resultado, er.ds_observacao, proc.no_proced,
                 prof_sol.no_civil_profissional AS no_civil_profissional_sol, cbo_sol.no_cbo AS no_cbo_sol,
-                prof_res.no_civil_profissional AS no_civil_profissional_res, cbo_res.no_cbo AS no_cbo_res
+                prof_res.no_civil_profissional AS no_civil_profissional_res, cbo_res.no_cbo AS no_cbo_res,
+                COALESCE(
+                  ex_cc.vl_clearance_creatina, ex_chdl.vl_colesterol_hdl, ex_cldl.vl_colesterol_ldl,
+                  ex_ctot.vl_colesterol_total, ex_cs.vl_creatina_serica, ex_hg.vl_hemoglobina_glicada,
+                  ex_tg.vl_triglicerideos
+                ) AS vl_resultado_estruturado
          FROM public.tb_exame_requisitado er
          INNER JOIN public.tb_prontuario p ON p.co_seq_prontuario = er.co_prontuario
-         LEFT JOIN public.tb_proced proc ON proc.co_proced::text = er.co_proced::text
+         LEFT JOIN public.tb_proced proc
+           ON proc.co_proced ~ '^[0-9]+$' AND proc.co_proced::bigint = er.co_proced::bigint
          LEFT JOIN public.tb_atend_prof ap_sol ON ap_sol.co_seq_atend_prof = er.co_atend_prof_solicitacao
          LEFT JOIN public.tb_lotacao l_sol ON l_sol.co_ator_papel = ap_sol.co_lotacao
          LEFT JOIN public.tb_prof prof_sol ON prof_sol.co_seq_prof = l_sol.co_prof
@@ -710,6 +745,13 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
          LEFT JOIN public.tb_lotacao l_res ON l_res.co_ator_papel = ap_res.co_lotacao
          LEFT JOIN public.tb_prof prof_res ON prof_res.co_seq_prof = l_res.co_prof
          LEFT JOIN public.tb_cbo cbo_res ON cbo_res.co_cbo = l_res.co_cbo
+         LEFT JOIN public.tb_exame_clearance_creatina ex_cc ON ex_cc.co_exame_requisitado = er.co_seq_exame_requisitado
+         LEFT JOIN public.tb_exame_colesterol_hdl ex_chdl ON ex_chdl.co_exame_requisitado = er.co_seq_exame_requisitado
+         LEFT JOIN public.tb_exame_colesterol_ldl ex_cldl ON ex_cldl.co_exame_requisitado = er.co_seq_exame_requisitado
+         LEFT JOIN public.tb_exame_colesterol_total ex_ctot ON ex_ctot.co_exame_requisitado = er.co_seq_exame_requisitado
+         LEFT JOIN public.tb_exame_creatina_serica ex_cs ON ex_cs.co_exame_requisitado = er.co_seq_exame_requisitado
+         LEFT JOIN public.tb_exame_hemoglobina_glicada ex_hg ON ex_hg.co_exame_requisitado = er.co_seq_exame_requisitado
+         LEFT JOIN public.tb_exame_triglicerideos ex_tg ON ex_tg.co_exame_requisitado = er.co_seq_exame_requisitado
          WHERE p.co_cidadao = $1
          ORDER BY er.co_requisicao_exame, er.co_seq_exame_requisitado`,
         [patientId],
@@ -767,6 +809,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
     ds_resultado: string | null;
     ds_observacao: string | null;
     no_proced: string | null;
+    vl_resultado_estruturado: number | null;
   }): ExamRequisitionItem {
     return {
       id: `exam-item:${row.co_seq_exame_requisitado}`,
@@ -775,7 +818,7 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
       requestedAt: row.dt_solicitacao,
       performedAt: row.dt_realizacao,
       resultAt: row.dt_resultado,
-      result: htmlToText(row.ds_resultado),
+      result: row.vl_resultado_estruturado != null ? formatExamValue(row.vl_resultado_estruturado) : htmlToText(row.ds_resultado),
       observation: htmlToText(row.ds_observacao),
     };
   }
@@ -1512,4 +1555,9 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   async onModuleDestroy() {
     await this.pool.close();
   }
+}
+
+/** Formata um valor numérico de resultado de exame (ex. `vl_colesterol_hdl`) no padrão pt-BR, sem casas decimais supérfluas. */
+function formatExamValue(value: number): string {
+  return value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 }
