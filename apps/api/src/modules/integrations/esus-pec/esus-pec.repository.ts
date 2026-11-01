@@ -1074,13 +1074,19 @@ export class EsusPecRepository implements PatientSourceRepository, OnModuleDestr
   }
 
   /**
-   * CONFIRMADO via DDL: `tb_medicamento_uso_continuo` é a tabela dedicada
-   * de "medicamentos em uso" do cidadão (uma linha por medicamento,
-   * ligada direto a `tb_prontuario` — não precisa passar por atendimento),
-   * com `co_ultima_receita_medicamento` apontando pra prescrição mais
-   * recente desse ciclo (de onde vem a posologia). Nome do medicamento via
-   * catálogo `tb_medicamento` — nome de coluna (`no_medicamento`) é chute
-   * por convenção, tabela e relacionamento (`co_medicamento`) são reais.
+   * CONFIRMADO via DDL real (cliente passou a definição completa de
+   * `tb_medicamento_uso_continuo`, incluindo as 3 FKs e a constraint
+   * `uk_medcmntusocntn_medcmntprntr` — UNIQUE em (co_medicamento,
+   * co_prontuario), ou seja, no máximo uma linha por medicamento por
+   * prontuário, sem risco de duplicata na lista): uma linha por
+   * medicamento em uso do cidadão, ligada direto a `tb_prontuario` via
+   * `co_prontuario` (não precisa passar por atendimento), com
+   * `co_ultima_receita_medicamento` apontando pra prescrição mais recente
+   * desse ciclo (de onde vem a posologia). O join em si (co_prontuario,
+   * co_medicamento, co_ultima_receita_medicamento) está 100% confirmado;
+   * só os nomes das colunas dentro dos catálogos (`tb_medicamento.no_medicamento`,
+   * `tb_receita_medicamento.no_posologia`/`ds_dose`/`co_seq_receita_medicamento`)
+   * continuam sendo convenção, não confirmados por DDL próprio dessas tabelas.
    */
   private async getMedicationsInUse(sourcePatientId: string): Promise<ContinuousMedication[] | null> {
     try {
