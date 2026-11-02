@@ -48,6 +48,7 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
       gap: 4,
       paddingHorizontal: 12,
       paddingBottom: 16,
+      marginBottom: 16,
       backgroundColor: theme.colors.primary,
       borderBottomLeftRadius: 32,
       borderBottomRightRadius: 32,

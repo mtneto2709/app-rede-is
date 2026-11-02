@@ -13,7 +13,7 @@ import type { ReactElement } from "react";
 export function PageHeader({ title }: { title: string }): ReactElement {
   const router = useRouter();
   return (
-    <header className="flex items-center gap-3 px-6 py-5 sticky top-0 z-10 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-b-[32px]">
+    <header className="flex items-center gap-3 px-6 py-5 mb-4 sticky top-0 z-10 bg-gradient-to-br from-primary to-secondary text-primary-foreground rounded-b-[32px]">
       <button onClick={() => router.back()} className="p-1 -ml-1">
         <ChevronLeft className="h-5 w-5" />
       </button>
