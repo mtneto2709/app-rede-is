@@ -87,6 +87,8 @@ export const TenantTheme = z.object({
       }),
     )
     .default([]),
+  /** Tempo (em segundos) entre trocas automáticas do carrossel de banners. Chave ausente no theme.json cai no default de 5s. */
+  bannerIntervalSeconds: z.number().positive().default(5),
 
   /**
    * Liga/desliga cada botão do app por cliente. Quando `false`, a tela e a

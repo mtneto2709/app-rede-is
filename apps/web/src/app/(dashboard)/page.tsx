@@ -6,8 +6,9 @@ export default async function DashboardPage() {
   return (
     <DashboardHome
       appName={theme.branding.appName}
-      logoUrl={theme.branding.logoLightUrl}
+      iconUrl={theme.branding.iconUrl}
       banners={theme.banners}
+      bannerIntervalSeconds={theme.bannerIntervalSeconds}
       features={theme.features}
     />
   );

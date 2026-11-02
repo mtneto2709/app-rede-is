@@ -55,6 +55,7 @@
       "order": 1
     }
   ],
+  "bannerIntervalSeconds": 5,
   "features": {
     "agendamentos": true,
     "teleconsulta": true,

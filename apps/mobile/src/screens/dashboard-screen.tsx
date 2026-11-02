@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -27,11 +27,24 @@ type Banner = TenantTheme["banners"][number];
 const BANNER_GAP = 12;
 const BANNER_HORIZONTAL_MARGIN = 24;
 
-/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com swipe e indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. Mesma fonte de dados do carrossel equivalente no web (dashboard-home.tsx). */
-function BannerCarousel({ banners, theme }: { banners: Banner[]; theme: TenantTheme }) {
+/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com troca automática (`theme.bannerIntervalSeconds`), swipe manual, indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. Mesma fonte de dados do carrossel equivalente no web (dashboard-home.tsx). */
+function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]; intervalSeconds: number; theme: TenantTheme }) {
   const sorted = useMemo(() => [...banners].sort((a, b) => a.order - b.order), [banners]);
   const [active, setActive] = useState(0);
   const cardWidth = Dimensions.get("window").width - BANNER_HORIZONTAL_MARGIN * 2;
+  const scrollerRef = useRef<ScrollView>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+
+  useEffect(() => {
+    if (sorted.length <= 1) return;
+    const id = setInterval(() => {
+      const next = (activeRef.current + 1) % sorted.length;
+      scrollerRef.current?.scrollTo({ x: next * (cardWidth + BANNER_GAP), animated: true });
+      setActive(next);
+    }, intervalSeconds * 1000);
+    return () => clearInterval(id);
+  }, [sorted.length, intervalSeconds, cardWidth]);
 
   if (sorted.length === 0) return null;
 
@@ -43,6 +56,7 @@ function BannerCarousel({ banners, theme }: { banners: Banner[]; theme: TenantTh
   return (
     <View style={{ marginTop: -20, marginBottom: 24 }}>
       <ScrollView
+        ref={scrollerRef}
         horizontal
         decelerationRate="fast"
         snapToInterval={cardWidth + BANNER_GAP}
@@ -139,7 +153,7 @@ export function DashboardScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Image source={{ uri: theme.branding.logoLightUrl }} style={styles.logo} />
+            <Image source={{ uri: theme.branding.iconUrl }} style={styles.logo} />
             <View style={{ flex: 1 }}>
               <Text style={styles.headerSubtitle}>Bem-vindo(a)</Text>
               <Text style={styles.headerTitle}>{profile?.name ? firstName(profile.name) : theme.branding.appName}</Text>
@@ -150,7 +164,7 @@ export function DashboardScreen() {
           </View>
         </View>
 
-        <BannerCarousel banners={theme.banners} theme={theme} />
+        <BannerCarousel banners={theme.banners} intervalSeconds={theme.bannerIntervalSeconds} theme={theme} />
 
         <View style={styles.grid}>
           {quickAccess.map((item, index) => {

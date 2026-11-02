@@ -21,3 +21,12 @@ body {
   background-color: var(--color-background);
   color: var(--color-text-primary);
 }
+
+/* Usado pelo carrossel de banners (dashboard-home.tsx): esconde a scrollbar nativa do scroll horizontal com snap, mantendo o scroll/swipe funcionando normalmente. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

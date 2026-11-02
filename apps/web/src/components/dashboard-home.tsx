@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type UIEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -31,10 +31,22 @@ type Banner = TenantTheme["banners"][number];
 
 type Feature = keyof TenantTheme["features"];
 
-/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com swipe e indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. */
-function BannerCarousel({ banners }: { banners: Banner[] }) {
+/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com troca automática (`theme.bannerIntervalSeconds`), swipe manual, indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. */
+function BannerCarousel({ banners, intervalSeconds }: { banners: Banner[]; intervalSeconds: number }) {
   const sorted = useMemo(() => [...banners].sort((a, b) => a.order - b.order), [banners]);
   const [active, setActive] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (sorted.length <= 1) return;
+    const id = setInterval(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const next = (Math.round(el.scrollLeft / el.clientWidth) + 1) % sorted.length;
+      el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+    }, intervalSeconds * 1000);
+    return () => clearInterval(id);
+  }, [sorted.length, intervalSeconds]);
 
   if (sorted.length === 0) return null;
 
@@ -46,7 +58,11 @@ function BannerCarousel({ banners }: { banners: Banner[] }) {
 
   return (
     <section className="px-6 -mt-5 mb-6">
-      <div onScroll={handleScroll} className="flex overflow-x-auto snap-x snap-mandatory gap-3">
+      <div
+        ref={scrollerRef}
+        onScroll={handleScroll}
+        className="no-scrollbar flex overflow-x-auto snap-x snap-mandatory gap-3"
+      >
         {sorted.map((banner, i) => (
           <div key={i} className="snap-center shrink-0 w-full rounded-2xl bg-surface shadow-lg overflow-hidden">
             {banner.imageUrl && (
@@ -101,13 +117,15 @@ const SERVICES = [
 
 export function DashboardHome({
   appName,
-  logoUrl,
+  iconUrl,
   banners,
+  bannerIntervalSeconds,
   features,
 }: {
   appName: string;
-  logoUrl: string;
+  iconUrl: string;
   banners: Banner[];
+  bannerIntervalSeconds: number;
   features: TenantTheme["features"];
 }) {
   const { data: stats, isLoading } = useMeQuery<DashboardStats>("dashboard");
@@ -123,7 +141,7 @@ export function DashboardHome({
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={logoUrl}
+              src={iconUrl}
               alt={appName}
               className="h-11 w-11 rounded-full bg-white object-contain p-1.5 ring-2 ring-white/30"
             />
@@ -138,7 +156,7 @@ export function DashboardHome({
         </div>
       </header>
 
-      <BannerCarousel banners={banners} />
+      <BannerCarousel banners={banners} intervalSeconds={bannerIntervalSeconds} />
 
       <section className="px-6 mb-8">
         <div className="grid grid-cols-2 gap-4">
