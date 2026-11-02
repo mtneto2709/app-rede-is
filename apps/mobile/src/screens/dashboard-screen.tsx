@@ -26,6 +26,8 @@ type Banner = TenantTheme["banners"][number];
 
 const BANNER_GAP = 12;
 const BANNER_HORIZONTAL_MARGIN = 24;
+/** Proporção largura:altura da imagem do banner (25:12 — mesma do web, `aspect-[25/12]` em dashboard-home.tsx). Banners enviados nessa proporção preenchem o card sem corte. */
+const BANNER_IMAGE_ASPECT_RATIO = 25 / 12;
 
 /** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com troca automática (`theme.bannerIntervalSeconds`), swipe manual, indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. Mesma fonte de dados do carrossel equivalente no web (dashboard-home.tsx). */
 function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]; intervalSeconds: number; theme: TenantTheme }) {
@@ -86,7 +88,11 @@ function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]
           >
             <View style={{ borderRadius: 16, overflow: "hidden" }}>
               {banner.imageUrl && (
-                <Image source={{ uri: banner.imageUrl }} style={{ height: 128, width: "100%" }} resizeMode="cover" />
+                <Image
+                  source={{ uri: banner.imageUrl }}
+                  style={{ width: "100%", aspectRatio: BANNER_IMAGE_ASPECT_RATIO }}
+                  resizeMode="cover"
+                />
               )}
               <View style={{ padding: 16 }}>
                 <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary }}>{banner.title}</Text>

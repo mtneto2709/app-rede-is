@@ -56,7 +56,7 @@ function BannerCarousel({ banners, intervalSeconds }: { banners: Banner[]; inter
           <div key={i} className="snap-center shrink-0 w-full rounded-2xl bg-surface shadow-lg overflow-hidden">
             {banner.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={banner.imageUrl} alt={banner.title} className="h-32 w-full object-cover" />
+              <img src={banner.imageUrl} alt={banner.title} className="w-full aspect-[25/12] object-cover" />
             )}
             <div className="p-4">
               <p className="font-semibold text-sm">{banner.title}</p>
