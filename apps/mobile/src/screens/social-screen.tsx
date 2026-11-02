@@ -1,4 +1,5 @@
-import { Linking, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/theme/theme-provider";
 import { withAlpha } from "@/theme/tone";
@@ -29,7 +30,7 @@ export function SocialScreen() {
   const styles = createStyles(theme);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScreenHeader title="Redes Sociais" />
       {theme.socialLinks.length === 0 && (
         <Text style={styles.empty}>Nenhuma rede social cadastrada.</Text>

@@ -5,12 +5,12 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
@@ -155,20 +155,29 @@ export function DashboardScreen() {
   const { data: profile } = useMeQuery<PatientProfileSummary>("profile");
   const theme = useTheme();
   const navigation = useNavigation<BottomTabNavigationProp<MainTabParamList>>();
+  const insets = useSafeAreaInsets();
   const styles = createStyles(theme);
 
   const quickAccess = QUICK_ACCESS.filter((item) => item.feature === null || theme.features[item.feature]);
   const services = SERVICES.filter((service) => theme.features[service.feature]);
 
+  // TODO: "bem-vindo"/"bem-vinda" por sexo do paciente — aguardando confirmação de qual
+  // coluna/base carrega essa informação (não existe ainda em PatientProfileSummary nem foi
+  // usada em nenhum lugar do backend até agora). Por ora usa a forma neutra "bem-vindo(a)",
+  // já usada antes nesta mesma tela.
+  const greetingName = profile?.name ? firstName(profile.name) : null;
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 24 }]}>
           <View style={styles.headerRow}>
             <Image source={{ uri: theme.branding.iconUrl }} style={styles.logo} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.headerSubtitle}>Bem-vindo(a)</Text>
-              <Text style={styles.headerTitle}>{profile?.name ? firstName(profile.name) : theme.branding.appName}</Text>
+              <Text style={styles.headerSubtitle}>
+                Olá{greetingName ? ` ${greetingName}` : ""}, bem-vindo(a) ao
+              </Text>
+              <Text style={styles.headerTitle}>{theme.branding.appName}</Text>
             </View>
             <Pressable style={styles.settingsButton} onPress={() => navigation.navigate("Perfil")}>
               <Ionicons name="settings-outline" size={20} color={theme.colors.primaryForeground} />
@@ -234,7 +243,6 @@ function createStyles(theme: ReturnType<typeof useTheme>) {
     header: {
       backgroundColor: theme.colors.primary,
       paddingHorizontal: 24,
-      paddingTop: 24,
       paddingBottom: 24,
       borderBottomLeftRadius: 32,
       borderBottomRightRadius: 32,

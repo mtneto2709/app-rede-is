@@ -1,4 +1,5 @@
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/theme/theme-provider";
 import { withAlpha } from "@/theme/tone";
@@ -9,7 +10,7 @@ export function TeleconsultaScreen() {
   const styles = createStyles(theme);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScreenHeader title="Teleconsulta" />
       <View style={styles.card}>
         <View style={[styles.icon, { backgroundColor: withAlpha(theme.colors.primary, "1A") }]}>

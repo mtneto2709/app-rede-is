@@ -1,5 +1,6 @@
-import { ActivityIndicator, FlatList, RefreshControl, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import type { StyleProp, ViewStyle } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/theme-provider";
 import { ScreenHeader } from "@/components/screen-header";
 
@@ -18,7 +19,7 @@ export function ScreenList<T>({ title, data, isLoading, error, emptyLabel, keyEx
   const styles = createStyles(theme);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScreenHeader title={title} />
       {isLoading && <ActivityIndicator style={{ marginTop: 24 }} color={theme.colors.primary} />}
       {error && <Text style={styles.error}>{error}</Text>}

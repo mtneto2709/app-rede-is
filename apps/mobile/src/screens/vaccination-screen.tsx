@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReactElement } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import type { VaccinationCardEntry, VaccinationCardResponse } from "@rede-is/shared-types";
@@ -133,7 +134,7 @@ export function VaccinationScreen(): ReactElement {
   const visibleEntries = data?.available ? data.entries.filter((e) => activeStatuses.has(e.status)) : [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScreenHeader title="Caderneta de Vacinação" />
       {isLoading && <ActivityIndicator style={{ marginTop: 24 }} color={theme.colors.primary} />}
       {error && <Text style={styles.error}>{error}</Text>}

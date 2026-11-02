@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import type { Appointment } from "@rede-is/shared-types";
 import { useMeQuery } from "@/lib/use-me-query";
 import { useTheme } from "@/theme/theme-provider";
@@ -34,7 +35,7 @@ export function AppointmentsScreen() {
   const items = tab === "futuros" ? futuros : passados;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScreenHeader title="Agendamentos" />
       <View style={styles.tabBar}>
         <Pressable

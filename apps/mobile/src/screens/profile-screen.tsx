@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, Pressable, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, Pressable, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import type { PatientProfileSummary } from "@rede-is/shared-types";
 import { useAuth } from "@/lib/auth-context";
@@ -66,7 +67,7 @@ export function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["bottom", "left", "right"]}>
       <ScreenHeader title="Meu Perfil" />
       <View style={styles.content}>
         <View style={styles.card}>
