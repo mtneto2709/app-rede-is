@@ -66,13 +66,17 @@ function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]
         contentContainerStyle={{ paddingHorizontal: BANNER_HORIZONTAL_MARGIN, gap: BANNER_GAP }}
       >
         {sorted.map((banner, i) => (
+          // Sombra (shadow*/elevation) numa View externa SEM overflow:hidden, e o recorte dos
+          // cantos arredondados numa View interna separada: no Android, uma View com elevation
+          // E overflow:hidden+borderRadius ao mesmo tempo não recorta a sombra direito, vazando
+          // um retângulo cinza nos cantos (bug real visto em teste no app, reportado pelo
+          // cliente — "parece um banner com cantos retos atrás do arredondado").
           <View
             key={i}
             style={{
               width: cardWidth,
               borderRadius: 16,
               backgroundColor: theme.colors.surface,
-              overflow: "hidden",
               shadowColor: "#000",
               shadowOpacity: 0.1,
               shadowRadius: 8,
@@ -80,12 +84,14 @@ function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]
               elevation: 3,
             }}
           >
-            {banner.imageUrl && (
-              <Image source={{ uri: banner.imageUrl }} style={{ height: 128, width: "100%" }} resizeMode="cover" />
-            )}
-            <View style={{ padding: 16 }}>
-              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary }}>{banner.title}</Text>
-              <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>{banner.description}</Text>
+            <View style={{ borderRadius: 16, overflow: "hidden" }}>
+              {banner.imageUrl && (
+                <Image source={{ uri: banner.imageUrl }} style={{ height: 128, width: "100%" }} resizeMode="cover" />
+              )}
+              <View style={{ padding: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary }}>{banner.title}</Text>
+                <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>{banner.description}</Text>
+              </View>
             </View>
           </View>
         ))}
