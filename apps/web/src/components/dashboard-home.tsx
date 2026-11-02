@@ -54,14 +54,21 @@ function BannerCarousel({ banners, intervalSeconds }: { banners: Banner[]; inter
       <div ref={scrollerRef} className="no-scrollbar flex overflow-x-auto snap-x snap-mandatory gap-3">
         {sorted.map((banner, i) => (
           <div key={i} className="snap-center shrink-0 w-full rounded-2xl bg-surface shadow-lg overflow-hidden">
-            {banner.imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={banner.imageUrl} alt={banner.title} className="w-full aspect-[25/12] object-cover" />
+            {banner.imageUrl ? (
+              <div className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={banner.imageUrl} alt={banner.title} className="w-full aspect-[25/12] object-cover" />
+                <div className="absolute inset-x-0 bottom-0 bg-black/45 p-4">
+                  <p className="font-semibold text-sm text-white">{banner.title}</p>
+                  <p className="text-xs text-white/85 mt-1">{banner.description}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4">
+                <p className="font-semibold text-sm">{banner.title}</p>
+                <p className="text-xs text-text-secondary mt-1">{banner.description}</p>
+              </div>
             )}
-            <div className="p-4">
-              <p className="font-semibold text-sm">{banner.title}</p>
-              <p className="text-xs text-text-secondary mt-1">{banner.description}</p>
-            </div>
           </div>
         ))}
       </div>

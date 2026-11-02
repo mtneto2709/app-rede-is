@@ -87,17 +87,33 @@ function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]
             }}
           >
             <View style={{ borderRadius: 16, overflow: "hidden" }}>
-              {banner.imageUrl && (
-                <Image
-                  source={{ uri: banner.imageUrl }}
-                  style={{ width: "100%", aspectRatio: BANNER_IMAGE_ASPECT_RATIO }}
-                  resizeMode="cover"
-                />
+              {banner.imageUrl ? (
+                <View>
+                  <Image
+                    source={{ uri: banner.imageUrl }}
+                    style={{ width: "100%", aspectRatio: BANNER_IMAGE_ASPECT_RATIO }}
+                    resizeMode="cover"
+                  />
+                  <View
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: "rgba(0,0,0,0.45)",
+                      padding: 16,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{banner.title}</Text>
+                    <Text style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", marginTop: 4 }}>{banner.description}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={{ padding: 16 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary }}>{banner.title}</Text>
+                  <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>{banner.description}</Text>
+                </View>
               )}
-              <View style={{ padding: 16 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary }}>{banner.title}</Text>
-                <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>{banner.description}</Text>
-              </View>
             </View>
           </View>
         ))}
