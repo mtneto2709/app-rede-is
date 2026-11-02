@@ -1,6 +1,13 @@
 # dependencies
 node_modules/
 .pnpm-store/
+# monorepo usa pnpm (ver packageManager em package.json) — um package-lock.json
+# solto (ex. de rodar "npm install" por engano) confunde a detecção de
+# package manager de ferramentas externas (EAS Build entre elas), que passam
+# a tentar instalar com npm em vez de pnpm e quebram a resolução dos pacotes
+# internos do workspace ("workspace:*").
+package-lock.json
+yarn.lock
 
 # env
 .env
