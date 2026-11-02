@@ -132,8 +132,10 @@ export function DashboardHome({
               className="h-11 w-11 rounded-full bg-white object-contain p-1.5 ring-2 ring-white/30"
             />
             <div>
-              <p className="text-sm opacity-90">Bem-vindo(a)</p>
-              <h1 className="text-lg font-semibold">{profile?.name ? firstName(profile.name) : appName}</h1>
+              <p className="text-sm opacity-90">
+                Olá{profile?.name ? ` ${firstName(profile.name)}` : ""}, bem-vindo(a) ao
+              </p>
+              <h1 className="text-lg font-semibold">{appName}</h1>
             </div>
           </div>
           <Link href="/perfil" className="p-2.5 rounded-full bg-white/15 hover:bg-white/25 transition-colors">
