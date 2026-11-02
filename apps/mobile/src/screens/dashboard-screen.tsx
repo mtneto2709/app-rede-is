@@ -1,4 +1,16 @@
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import {
+  Dimensions,
+  Image,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +22,78 @@ import { toneColorAt, withAlpha } from "@/theme/tone";
 import type { MainTabParamList } from "@/navigation/root-navigator";
 
 type Feature = keyof TenantTheme["features"];
+type Banner = TenantTheme["banners"][number];
+
+const BANNER_GAP = 12;
+const BANNER_HORIZONTAL_MARGIN = 24;
+
+/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com swipe e indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. Mesma fonte de dados do carrossel equivalente no web (dashboard-home.tsx). */
+function BannerCarousel({ banners, theme }: { banners: Banner[]; theme: TenantTheme }) {
+  const sorted = useMemo(() => [...banners].sort((a, b) => a.order - b.order), [banners]);
+  const [active, setActive] = useState(0);
+  const cardWidth = Dimensions.get("window").width - BANNER_HORIZONTAL_MARGIN * 2;
+
+  if (sorted.length === 0) return null;
+
+  function handleScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const index = Math.round(e.nativeEvent.contentOffset.x / (cardWidth + BANNER_GAP));
+    setActive(index);
+  }
+
+  return (
+    <View style={{ marginTop: -20, marginBottom: 24 }}>
+      <ScrollView
+        horizontal
+        decelerationRate="fast"
+        snapToInterval={cardWidth + BANNER_GAP}
+        snapToAlignment="start"
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScroll}
+        contentContainerStyle={{ paddingHorizontal: BANNER_HORIZONTAL_MARGIN, gap: BANNER_GAP }}
+      >
+        {sorted.map((banner, i) => (
+          <View
+            key={i}
+            style={{
+              width: cardWidth,
+              borderRadius: 16,
+              backgroundColor: theme.colors.surface,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 3,
+            }}
+          >
+            {banner.imageUrl && (
+              <Image source={{ uri: banner.imageUrl }} style={{ height: 128, width: "100%" }} resizeMode="cover" />
+            )}
+            <View style={{ padding: 16 }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.colors.textPrimary }}>{banner.title}</Text>
+              <Text style={{ fontSize: 11, color: theme.colors.textSecondary, marginTop: 4 }}>{banner.description}</Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+      {sorted.length > 1 && (
+        <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 }}>
+          {sorted.map((_, i) => (
+            <View
+              key={i}
+              style={{
+                height: 6,
+                width: i === active ? 16 : 6,
+                borderRadius: 3,
+                backgroundColor: i === active ? theme.colors.primary : withAlpha(theme.colors.primary, "4D"),
+              }}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
 
 function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] ?? "";
@@ -65,6 +149,8 @@ export function DashboardScreen() {
             </Pressable>
           </View>
         </View>
+
+        <BannerCarousel banners={theme.banners} theme={theme} />
 
         <View style={styles.grid}>
           {quickAccess.map((item, index) => {

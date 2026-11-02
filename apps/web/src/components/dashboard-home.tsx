@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState, type UIEvent } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -26,13 +27,52 @@ function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] ?? "";
 }
 
-interface Banner {
-  title: string;
-  description: string;
-  imageUrl?: string;
-}
+type Banner = TenantTheme["banners"][number];
 
 type Feature = keyof TenantTheme["features"];
+
+/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com swipe e indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. */
+function BannerCarousel({ banners }: { banners: Banner[] }) {
+  const sorted = useMemo(() => [...banners].sort((a, b) => a.order - b.order), [banners]);
+  const [active, setActive] = useState(0);
+
+  if (sorted.length === 0) return null;
+
+  function handleScroll(e: UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    const index = Math.round(el.scrollLeft / el.clientWidth);
+    setActive(index);
+  }
+
+  return (
+    <section className="px-6 -mt-5 mb-6">
+      <div onScroll={handleScroll} className="flex overflow-x-auto snap-x snap-mandatory gap-3">
+        {sorted.map((banner, i) => (
+          <div key={i} className="snap-center shrink-0 w-full rounded-2xl bg-surface shadow-lg overflow-hidden">
+            {banner.imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={banner.imageUrl} alt={banner.title} className="h-32 w-full object-cover" />
+            )}
+            <div className="p-4">
+              <p className="font-semibold text-sm">{banner.title}</p>
+              <p className="text-xs text-text-secondary mt-1">{banner.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      {sorted.length > 1 && (
+        <div className="flex justify-center gap-1.5 mt-2">
+          {sorted.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${i === active ? "w-4 bg-primary" : "w-1.5 bg-primary/30"}`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const QUICK_ACCESS = [
   { key: "attendancesCount", label: "Atendimentos", href: "/atendimentos", icon: UserCheck, tone: "primary", feature: "atendimentos" },
@@ -98,14 +138,7 @@ export function DashboardHome({
         </div>
       </header>
 
-      {banners[0] && (
-        <section className="px-6 -mt-5 mb-6">
-          <div className="rounded-2xl bg-surface shadow-lg p-4">
-            <p className="font-semibold text-sm">{banners[0].title}</p>
-            <p className="text-xs text-text-secondary mt-1">{banners[0].description}</p>
-          </div>
-        </section>
-      )}
+      <BannerCarousel banners={banners} />
 
       <section className="px-6 mb-8">
         <div className="grid grid-cols-2 gap-4">
