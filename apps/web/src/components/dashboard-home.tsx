@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -31,10 +31,9 @@ type Banner = TenantTheme["banners"][number];
 
 type Feature = keyof TenantTheme["features"];
 
-/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com troca automática (`theme.bannerIntervalSeconds`), swipe manual, indicadores quando houver mais de um, e imagem (`imageUrl`) quando informada. */
+/** Carrossel de banners do tenant (`theme.banners`) — ordenado por `order`, com troca automática (`theme.bannerIntervalSeconds`), swipe manual, e imagem (`imageUrl`) quando informada. */
 function BannerCarousel({ banners, intervalSeconds }: { banners: Banner[]; intervalSeconds: number }) {
   const sorted = useMemo(() => [...banners].sort((a, b) => a.order - b.order), [banners]);
-  const [active, setActive] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,19 +49,9 @@ function BannerCarousel({ banners, intervalSeconds }: { banners: Banner[]; inter
 
   if (sorted.length === 0) return null;
 
-  function handleScroll(e: UIEvent<HTMLDivElement>) {
-    const el = e.currentTarget;
-    const index = Math.round(el.scrollLeft / el.clientWidth);
-    setActive(index);
-  }
-
   return (
     <section className="px-6 -mt-5 mb-6">
-      <div
-        ref={scrollerRef}
-        onScroll={handleScroll}
-        className="no-scrollbar flex overflow-x-auto snap-x snap-mandatory gap-3"
-      >
+      <div ref={scrollerRef} className="no-scrollbar flex overflow-x-auto snap-x snap-mandatory gap-3">
         {sorted.map((banner, i) => (
           <div key={i} className="snap-center shrink-0 w-full rounded-2xl bg-surface shadow-lg overflow-hidden">
             {banner.imageUrl && (
@@ -76,16 +65,6 @@ function BannerCarousel({ banners, intervalSeconds }: { banners: Banner[]; inter
           </div>
         ))}
       </div>
-      {sorted.length > 1 && (
-        <div className="flex justify-center gap-1.5 mt-2">
-          {sorted.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${i === active ? "w-4 bg-primary" : "w-1.5 bg-primary/30"}`}
-            />
-          ))}
-        </div>
-      )}
     </section>
   );
 }

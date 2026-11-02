@@ -96,21 +96,6 @@ function BannerCarousel({ banners, intervalSeconds, theme }: { banners: Banner[]
           </View>
         ))}
       </ScrollView>
-      {sorted.length > 1 && (
-        <View style={{ flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 }}>
-          {sorted.map((_, i) => (
-            <View
-              key={i}
-              style={{
-                height: 6,
-                width: i === active ? 16 : 6,
-                borderRadius: 3,
-                backgroundColor: i === active ? theme.colors.primary : withAlpha(theme.colors.primary, "4D"),
-              }}
-            />
-          ))}
-        </View>
-      )}
     </View>
   );
 }
