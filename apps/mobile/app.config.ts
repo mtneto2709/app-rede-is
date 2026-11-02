@@ -1,6 +1,6 @@
 import type { ExpoConfig, ConfigContext } from "expo/config";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 // Import direto do submódulo (não do barrel "@rede-is/theme-tokens") porque
 // o carregador de config do Expo executa este arquivo com a resolução ESM
 // nativa do Node, que — ao contrário do Metro (bundler do app em si) e do
@@ -25,6 +25,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const raw = JSON.parse(readFileSync(join(clientsDir, slug, "theme.json"), "utf-8"));
   const theme = TenantTheme.parse(raw);
 
+  // `branding.iconUrl`/`splashUrl` são caminhos de URL pro servidor web
+  // (ex. "/clients/demo/icon.png", resolvido contra o domínio do tenant em
+  // `extra.theme`, usado em runtime) — NÃO são caminhos de arquivo. Pros
+  // campos nativos do Expo (icon/splash/adaptiveIcon), que exigem um
+  // arquivo de verdade no disco pra gerar os ícones durante o prebuild,
+  // resolve pelo nome do arquivo dentro de `clients/<slug>/` (mesmo
+  // diretório de onde veio o theme.json). Usar a URL direto quebrava o
+  // build: o "/" inicial fazia o Node tratar como raiz do sistema de
+  // arquivos ("/clients/demo/icon.png" literal), nunca encontrando o
+  // arquivo real — BUG REAL reproduzido via `expo prebuild` local
+  // ("ENOENT: no such file or directory, open '/clients/demo/icon.png'").
+  const iconPath = join(clientsDir, slug, basename(theme.branding.iconUrl));
+  const splashPath = join(clientsDir, slug, basename(theme.branding.splashUrl));
+
   return {
     ...config,
     name: theme.branding.appName,
@@ -32,7 +46,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     scheme: `redeis-${theme.slug}`,
     version: "1.0.0",
     orientation: "portrait",
-    icon: theme.branding.iconUrl,
+    icon: iconPath,
     // SDK 57 removeu `splash` do topo do config — vira config do plugin
     // `expo-splash-screen` (precisa estar em "dependencies", não só no
     // `expo` em si).
@@ -41,7 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-splash-screen",
         {
-          image: theme.branding.splashUrl,
+          image: splashPath,
           backgroundColor: theme.colors.background,
         },
       ],
@@ -56,7 +70,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       package: theme.mobile.androidPackage,
       adaptiveIcon: {
-        foregroundImage: theme.branding.iconUrl,
+        foregroundImage: iconPath,
         backgroundColor: theme.colors.background,
       },
     },
