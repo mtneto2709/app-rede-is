@@ -1,0 +1,54 @@
+{
+  "slug": "rede-is",
+  "displayName": "Rede IS",
+  "legalName": "SUBSTITUIR_PELA_RAZAO_SOCIAL_DO_CLIENTE",
+  "branding": {
+    "appName": "Rede IS",
+    "logoLightUrl": "/clients/rede-is/logo-light.svg",
+    "logoDarkUrl": "/clients/rede-is/logo-dark.svg",
+    "iconUrl": "/clients/rede-is/icon.png",
+    "faviconUrl": "/clients/rede-is/favicon.png",
+    "splashUrl": "/clients/rede-is/splash.png"
+  },
+  "colors": {
+    "primary": "#7C3AED",
+    "primaryForeground": "#FFFFFF",
+    "secondary": "#4F46E5",
+    "secondaryForeground": "#FFFFFF",
+    "background": "#F9FAFB",
+    "surface": "#FFFFFF",
+    "textPrimary": "#111827",
+    "textSecondary": "#6B7280",
+    "success": "#16A34A",
+    "warning": "#D97706",
+    "danger": "#DC2626"
+  },
+  "mobile": {
+    "iosBundleId": "com.sotech.zerafila.zerafila",
+    "androidPackage": "com.sotech.zerafila.zerafila"
+  },
+  "web": {
+    "domains": ["SUBSTITUIR_PELO_DOMINIO_REAL_DO_CLIENTE", "localhost"]
+  },
+  "auth": {
+    "socialProviders": [],
+    "otpChannels": ["sms", "email"],
+    "requireFirstAccessQuestionnaire": true
+  },
+  "contactSupport": {
+    "phone": null,
+    "whatsapp": null,
+    "email": null
+  },
+  "cards": [
+    {
+      "id": "sus",
+      "title": "Cartão Nacional de Saúde",
+      "frontImageUrl": "/clients/rede-is/cards/sus-front.png",
+      "backImageUrl": "/clients/rede-is/cards/sus-back.png",
+      "showPatientName": true,
+      "showCns": true,
+      "showCpf": true
+    }
+  ]
+}

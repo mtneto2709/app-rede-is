@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 12.0.0"
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "base": {
@@ -30,6 +31,33 @@
         "EXPO_PUBLIC_TENANT_SLUG": "demo",
         "EXPO_PUBLIC_API_BASE_URL": "SUBSTITUA_PELA_URL_PUBLICA_DA_API"
       }
+    },
+    "rede-is-development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_TENANT_SLUG": "rede-is",
+        "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3000"
+      }
+    },
+    "rede-is-production": {
+      "extends": "base",
+      "android": {
+        "credentialsSource": "local"
+      },
+      "env": {
+        "EXPO_PUBLIC_TENANT_SLUG": "rede-is",
+        "EXPO_PUBLIC_API_BASE_URL": "TODO: URL de producao da API para este cliente"
+      }
+    },
+    "rede-is-preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_TENANT_SLUG": "rede-is",
+        "EXPO_PUBLIC_API_BASE_URL": "TODO: URL publica de homologacao da API para este cliente"
+      }
     }
   },
   "submit": {
@@ -42,6 +70,12 @@
       "android": {
         "serviceAccountKeyPath": "TODO: caminho do JSON da service account do Google Play do cliente",
         "track": "internal"
+      }
+    },
+    "rede-is-production": {
+      "android": {
+        "serviceAccountKeyPath": "TODO: caminho do JSON da service account do Google Play do cliente (conta que publica o Zera Fila)",
+        "track": "production"
       }
     }
   }
